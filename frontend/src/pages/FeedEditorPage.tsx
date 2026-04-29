@@ -2,19 +2,49 @@ import { FormEvent, useEffect, useState } from "react";
 import { api, Feed, FeedForm, PreviewResult } from "../api";
 import { Button, Field, Input, Modal, Select, Textarea } from "../components/ui";
 
-const emptyForm: FeedForm = {
-  title: "",
-  sender: "",
-  imap_host: "",
-  imap_port: 993,
-  imap_tls: "ssl",
-  imap_username: "",
-  imap_password: "",
-  folders: ["INBOX"],
-  backfill_days: 30,
-  retention_count: 50,
-  sync_interval_minutes: 60
-};
+function emptyForm(): FeedForm {
+  return {
+    title: "",
+    sender: "",
+    imap_host: "",
+    imap_port: 993,
+    imap_tls: "ssl",
+    imap_username: "",
+    imap_password: "",
+    folders: ["INBOX"],
+    backfill_days: 30,
+    retention_count: 50,
+    sync_interval_minutes: 60
+  };
+}
+
+function formFromFeed(feed: Feed): FeedForm {
+  return {
+    title: feed.title,
+    sender: feed.sender,
+    imap_host: feed.imap_host,
+    imap_port: feed.imap_port,
+    imap_tls: feed.imap_tls,
+    imap_username: feed.imap_username,
+    imap_password: "",
+    folders: [...feed.folders],
+    backfill_days: feed.backfill_days,
+    retention_count: feed.retention_count,
+    sync_interval_minutes: feed.sync_interval_minutes
+  };
+}
+
+function formWithRecentImapSettings(feed: Feed): FeedForm {
+  return {
+    ...emptyForm(),
+    imap_host: feed.imap_host,
+    imap_port: feed.imap_port,
+    imap_tls: feed.imap_tls,
+    imap_username: feed.imap_username,
+    folders: [...feed.folders],
+    imap_password: ""
+  };
+}
 
 export default function FeedEditorModal({
   open,
@@ -29,41 +59,56 @@ export default function FeedEditorModal({
 }) {
   const isEdit = feedId !== null;
 
-  const [form, setForm] = useState<FeedForm>(emptyForm);
+  const [form, setForm] = useState<FeedForm>(() => emptyForm());
   const [existingFeed, setExistingFeed] = useState<Feed | null>(null);
   const [preview, setPreview] = useState<PreviewResult | null>(null);
   const [busy, setBusy] = useState<"preview" | "save" | "loading" | null>(null);
   const [error, setError] = useState("");
 
   useEffect(() => {
+    let cancelled = false;
+
     if (!open) {
-      setForm(emptyForm);
+      setForm(emptyForm());
       setExistingFeed(null);
       setPreview(null);
       setBusy(null);
       setError("");
       return;
     }
-    if (!isEdit) return;
+
+    setPreview(null);
+    setError("");
     setBusy("loading");
-    api.getFeed(feedId).then((result) => {
-      const feed = result.feed;
-      setExistingFeed(feed);
-      setForm({
-        title: feed.title,
-        sender: feed.sender,
-        imap_host: feed.imap_host,
-        imap_port: feed.imap_port,
-        imap_tls: feed.imap_tls,
-        imap_username: feed.imap_username,
-        imap_password: "",
-        folders: feed.folders,
-        backfill_days: feed.backfill_days,
-        retention_count: feed.retention_count,
-        sync_interval_minutes: feed.sync_interval_minutes
+
+    if (isEdit) {
+      api.getFeed(feedId).then((result) => {
+        if (cancelled) return;
+        const feed = result.feed;
+        setExistingFeed(feed);
+        setForm(formFromFeed(feed));
+        setBusy(null);
+      }).catch(() => {
+        if (!cancelled) onClose();
       });
-      setBusy(null);
-    }).catch(() => onClose());
+    } else {
+      setExistingFeed(null);
+      api.listFeeds({ page: 1, page_size: 1, sort_by: "created_at", sort_dir: "desc" }).then((result) => {
+        if (cancelled) return;
+        const recentFeed = result.feeds[0];
+        setForm(recentFeed ? formWithRecentImapSettings(recentFeed) : emptyForm());
+        setBusy(null);
+      }).catch(() => {
+        if (cancelled) return;
+        setForm(emptyForm());
+        setError("Could not load recent IMAP settings. Enter them manually.");
+        setBusy(null);
+      });
+    }
+
+    return () => {
+      cancelled = true;
+    };
   }, [open, feedId, isEdit, onClose]);
 
   function patch(update: Partial<FeedForm>) {
