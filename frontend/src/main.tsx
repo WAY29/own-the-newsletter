@@ -6,7 +6,6 @@ import { RssIcon, LogOutIcon } from "./components/icons";
 import { Button } from "./components/ui";
 import LoginPage from "./pages/LoginPage";
 import FeedsPage from "./pages/FeedsPage";
-import FeedEditorPage from "./pages/FeedEditorPage";
 import "./styles.css";
 
 function AppShell() {
@@ -51,8 +50,6 @@ function AppShell() {
       </header>
       <Routes>
         <Route path="/" element={<FeedsPage onLogout={handleLogout} />} />
-        <Route path="/feeds/new" element={<FeedEditorPage />} />
-        <Route path="/feeds/:id/edit" element={<FeedEditorPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </div>

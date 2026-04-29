@@ -1,8 +1,6 @@
 import { FormEvent, useEffect, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
 import { api, Feed, FeedForm, PreviewResult } from "../api";
-import { Button, Field, Input, Select, Textarea } from "../components/ui";
-import { ArrowLeftIcon } from "../components/icons";
+import { Button, Field, Input, Modal, Select, Textarea } from "../components/ui";
 
 const emptyForm: FeedForm = {
   title: "",
@@ -18,23 +16,40 @@ const emptyForm: FeedForm = {
   sync_interval_minutes: 60
 };
 
-export default function FeedEditorPage() {
-  const navigate = useNavigate();
-  const { id } = useParams<{ id: string }>();
-  const isEdit = id !== undefined;
+export default function FeedEditorModal({
+  open,
+  feedId,
+  onClose,
+  onSaved
+}: {
+  open: boolean;
+  feedId: number | null;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const isEdit = feedId !== null;
 
   const [form, setForm] = useState<FeedForm>(emptyForm);
   const [existingFeed, setExistingFeed] = useState<Feed | null>(null);
   const [preview, setPreview] = useState<PreviewResult | null>(null);
-  const [busy, setBusy] = useState<"preview" | "save" | "loading" | null>(isEdit ? "loading" : null);
+  const [busy, setBusy] = useState<"preview" | "save" | "loading" | null>(null);
   const [error, setError] = useState("");
 
   useEffect(() => {
+    if (!open) {
+      setForm(emptyForm);
+      setExistingFeed(null);
+      setPreview(null);
+      setBusy(null);
+      setError("");
+      return;
+    }
     if (!isEdit) return;
+    setBusy("loading");
     api.listFeeds().then((result) => {
-      const feed = result.feeds.find((f) => f.id === Number(id));
+      const feed = result.feeds.find((f) => f.id === feedId);
       if (!feed) {
-        navigate("/", { replace: true });
+        onClose();
         return;
       }
       setExistingFeed(feed);
@@ -52,8 +67,8 @@ export default function FeedEditorPage() {
         sync_interval_minutes: feed.sync_interval_minutes
       });
       setBusy(null);
-    }).catch(() => navigate("/", { replace: true }));
-  }, [id, isEdit, navigate]);
+    }).catch(() => onClose());
+  }, [open, feedId, isEdit, onClose]);
 
   function patch(update: Partial<FeedForm>) {
     setForm((cur) => ({ ...cur, ...update }));
@@ -87,157 +102,146 @@ export default function FeedEditorPage() {
       } else {
         await api.createFeed(form);
       }
-      navigate("/", { replace: true });
+      onSaved();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Save failed");
       setBusy(null);
     }
   }
 
-  if (busy === "loading") {
-    return (
-      <div className="app-content editor-page">
-        <p style={{ color: "var(--text-tertiary)" }}>Loading feed...</p>
-      </div>
-    );
-  }
+  const title = isEdit ? "Edit feed" : "Create feed";
 
   return (
-    <div className="app-content editor-page">
-      <div className="page-header">
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <Button variant="icon" onClick={() => navigate("/")}>
-            <ArrowLeftIcon />
-          </Button>
-          <h1>{isEdit ? "Edit feed" : "Create feed"}</h1>
-        </div>
-      </div>
+    <Modal open={open} onClose={onClose} title={title}>
+      {busy === "loading" ? (
+        <p style={{ color: "var(--text-tertiary)" }}>Loading feed...</p>
+      ) : (
+        <>
+          <p style={{ fontSize: 13, color: "var(--text-tertiary)", marginBottom: 20 }}>
+            IMAP settings are validated before saving.
+            {isEdit ? " Leave password blank to keep the saved encrypted password." : ""}
+          </p>
 
-      <div className="card">
-        <p style={{ fontSize: 13, color: "var(--text-tertiary)", marginBottom: 20 }}>
-          IMAP settings are validated before saving.
-          {isEdit ? " Leave password blank to keep the saved encrypted password." : ""}
-        </p>
-
-        <form onSubmit={save}>
-          <div className="form-grid">
-            <Field label="Feed title">
-              <Input
-                value={form.title}
-                onChange={(e) => patch({ title: e.target.value })}
-                placeholder="My Newsletter"
-                required
-              />
-            </Field>
-            <Field label="Recipient filter" hint="Case-insensitive exact match on To, Cc, Delivered-To, X-Original-To.">
-              <Input
-                value={form.recipient}
-                onChange={(e) => patch({ recipient: e.target.value })}
-                placeholder="newsletter@example.com"
-                required
-              />
-            </Field>
-            <Field label="IMAP host">
-              <Input
-                value={form.imap_host}
-                onChange={(e) => patch({ imap_host: e.target.value })}
-                placeholder="imap.example.com"
-                required
-              />
-            </Field>
-            <Field label="Port">
-              <Input
-                type="number"
-                value={form.imap_port}
-                onChange={(e) => patch({ imap_port: Number(e.target.value) })}
-                required
-              />
-            </Field>
-            <Field label="TLS">
-              <Select
-                value={form.imap_tls}
-                onChange={(e) => patch({ imap_tls: e.target.value as FeedForm["imap_tls"] })}
-              >
-                <option value="ssl">SSL</option>
-                <option value="starttls">STARTTLS</option>
-                <option value="none">None</option>
-              </Select>
-            </Field>
-            <Field label="Username">
-              <Input
-                value={form.imap_username}
-                onChange={(e) => patch({ imap_username: e.target.value })}
-                required
-              />
-            </Field>
-            <Field label="Password" hint={isEdit ? "Leave blank to keep saved password." : "Encrypted before storage."}>
-              <Input
-                type="password"
-                value={form.imap_password}
-                onChange={(e) => patch({ imap_password: e.target.value })}
-                required={!isEdit}
-              />
-            </Field>
-            <Field label="Folders" hint="One folder per line. INBOX is the default.">
-              <Textarea
-                value={form.folders.join("\n")}
-                onChange={(e) => patch({ folders: e.target.value.split(/\n+/).map((v) => v.trim()).filter(Boolean) })}
-              />
-            </Field>
-            <Field label="Backfill days">
-              <Input
-                type="number"
-                value={form.backfill_days}
-                onChange={(e) => patch({ backfill_days: Number(e.target.value) })}
-              />
-            </Field>
-            <Field label="Retention count">
-              <Input
-                type="number"
-                value={form.retention_count}
-                onChange={(e) => patch({ retention_count: Number(e.target.value) })}
-              />
-            </Field>
-            <Field label="Sync interval (minutes)" hint="Set 0 to disable scheduled sync.">
-              <Input
-                type="number"
-                value={form.sync_interval_minutes}
-                onChange={(e) => patch({ sync_interval_minutes: Number(e.target.value) })}
-              />
-            </Field>
-          </div>
-
-          {error ? <div className="error-msg">{error}</div> : null}
-
-          {preview ? (
-            <div className="preview-box">
-              <strong>{preview.match_count} matching message{preview.match_count === 1 ? "" : "s"}</strong>
-              <p>Scanned {preview.scanned_count} recent message{preview.scanned_count === 1 ? "" : "s"}.</p>
-              {preview.samples.length > 0 ? (
-                <ul className="preview-list">
-                  {preview.samples.map((s) => (
-                    <li key={`${s.folder}-${s.uid}`}>
-                      <span>{s.subject}</span>
-                      <small>{s.author || "Unknown author"}</small>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p style={{ marginTop: 8 }}>Zero matches is fine — save the feed for future newsletters.</p>
-              )}
+          <form onSubmit={save}>
+            <div className="form-grid">
+              <Field label="Feed title">
+                <Input
+                  value={form.title}
+                  onChange={(e) => patch({ title: e.target.value })}
+                  placeholder="My Newsletter"
+                  required
+                />
+              </Field>
+              <Field label="Recipient filter" hint="Case-insensitive exact match on To, Cc, Delivered-To, X-Original-To.">
+                <Input
+                  value={form.recipient}
+                  onChange={(e) => patch({ recipient: e.target.value })}
+                  placeholder="newsletter@example.com"
+                  required
+                />
+              </Field>
+              <Field label="IMAP host">
+                <Input
+                  value={form.imap_host}
+                  onChange={(e) => patch({ imap_host: e.target.value })}
+                  placeholder="imap.example.com"
+                  required
+                />
+              </Field>
+              <Field label="Port">
+                <Input
+                  type="number"
+                  value={form.imap_port}
+                  onChange={(e) => patch({ imap_port: Number(e.target.value) })}
+                  required
+                />
+              </Field>
+              <Field label="TLS">
+                <Select
+                  value={form.imap_tls}
+                  onChange={(e) => patch({ imap_tls: e.target.value as FeedForm["imap_tls"] })}
+                >
+                  <option value="ssl">SSL</option>
+                  <option value="starttls">STARTTLS</option>
+                  <option value="none">None</option>
+                </Select>
+              </Field>
+              <Field label="Username">
+                <Input
+                  value={form.imap_username}
+                  onChange={(e) => patch({ imap_username: e.target.value })}
+                  required
+                />
+              </Field>
+              <Field label="Password" hint={isEdit ? "Leave blank to keep saved password." : "Encrypted before storage."}>
+                <Input
+                  type="password"
+                  value={form.imap_password}
+                  onChange={(e) => patch({ imap_password: e.target.value })}
+                  required={!isEdit}
+                />
+              </Field>
+              <Field label="Folders" hint="One folder per line. INBOX is the default.">
+                <Textarea
+                  value={form.folders.join("\n")}
+                  onChange={(e) => patch({ folders: e.target.value.split(/\n+/).map((v) => v.trim()).filter(Boolean) })}
+                />
+              </Field>
+              <Field label="Backfill days">
+                <Input
+                  type="number"
+                  value={form.backfill_days}
+                  onChange={(e) => patch({ backfill_days: Number(e.target.value) })}
+                />
+              </Field>
+              <Field label="Retention count">
+                <Input
+                  type="number"
+                  value={form.retention_count}
+                  onChange={(e) => patch({ retention_count: Number(e.target.value) })}
+                />
+              </Field>
+              <Field label="Sync interval (minutes)" hint="Set 0 to disable scheduled sync.">
+                <Input
+                  type="number"
+                  value={form.sync_interval_minutes}
+                  onChange={(e) => patch({ sync_interval_minutes: Number(e.target.value) })}
+                />
+              </Field>
             </div>
-          ) : null}
 
-          <div className="form-actions">
-            <Button variant="ghost" type="button" onClick={runPreview} disabled={busy !== null}>
-              {busy === "preview" ? "Previewing..." : "Preview matches"}
-            </Button>
-            <Button disabled={busy !== null}>
-              {busy === "save" ? "Saving..." : isEdit ? "Save changes" : "Create feed"}
-            </Button>
-          </div>
-        </form>
-      </div>
-    </div>
+            {error ? <div className="error-msg">{error}</div> : null}
+
+            {preview ? (
+              <div className="preview-box">
+                <strong>{preview.match_count} matching message{preview.match_count === 1 ? "" : "s"}</strong>
+                <p>Scanned {preview.scanned_count} recent message{preview.scanned_count === 1 ? "" : "s"}.</p>
+                {preview.samples.length > 0 ? (
+                  <ul className="preview-list">
+                    {preview.samples.map((s) => (
+                      <li key={`${s.folder}-${s.uid}`}>
+                        <span>{s.subject}</span>
+                        <small>{s.author || "Unknown author"}</small>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p style={{ marginTop: 8 }}>Zero matches is fine — save the feed for future newsletters.</p>
+                )}
+              </div>
+            ) : null}
+
+            <div className="form-actions">
+              <Button variant="ghost" type="button" onClick={runPreview} disabled={busy !== null}>
+                {busy === "preview" ? "Previewing..." : "Preview matches"}
+              </Button>
+              <Button disabled={busy !== null}>
+                {busy === "save" ? "Saving..." : isEdit ? "Save changes" : "Create feed"}
+              </Button>
+            </div>
+          </form>
+        </>
+      )}
+    </Modal>
   );
 }
