@@ -11,7 +11,7 @@ __pycache__/
 *.db
 data/*
 !data/.gitkeep
-!data/feeds/
+data/feeds/*
 !data/feeds/.gitkeep
 backend/.coverage
 backend/data/
