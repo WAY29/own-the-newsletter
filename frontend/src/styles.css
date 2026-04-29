@@ -267,6 +267,52 @@ button, input, select, textarea {
 }
 
 /* Feed list */
+.feed-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 16px;
+  background: rgba(255, 255, 255, 0.015);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.feed-toolbar-summary {
+  color: var(--text-tertiary);
+  font-size: 12px;
+  font-weight: 510;
+  white-space: nowrap;
+}
+
+.feed-toolbar-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.feed-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-quaternary);
+  font-size: 12px;
+  font-weight: 510;
+}
+
+.feed-control .input {
+  width: auto;
+  min-width: 112px;
+  padding-top: 5px;
+  padding-bottom: 5px;
+  font-size: 12px;
+}
+
+.feed-list-error {
+  margin: 12px 16px 0;
+}
+
 .feed-list {
   display: flex;
   flex-direction: column;
@@ -328,6 +374,24 @@ button, input, select, textarea {
   color: var(--text-tertiary);
   white-space: nowrap;
   flex-shrink: 0;
+}
+
+.pagination-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--border-subtle);
+  color: var(--text-tertiary);
+  font-size: 12px;
+  font-weight: 510;
+}
+
+.pagination-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 /* Status badge */
@@ -545,6 +609,25 @@ button, input, select, textarea {
     flex-direction: column;
     align-items: flex-start;
     gap: 10px;
+  }
+
+  .feed-toolbar,
+  .pagination-bar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .feed-toolbar-controls {
+    justify-content: flex-start;
+  }
+
+  .feed-control {
+    flex: 1;
+  }
+
+  .feed-control .input {
+    min-width: 0;
+    flex: 1;
   }
 
   .feed-row-actions {

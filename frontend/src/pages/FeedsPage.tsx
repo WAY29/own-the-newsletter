@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
-import { api, Feed } from "../api";
-import { Button, StatusBadge } from "../components/ui";
+import { api, type Feed, type FeedListPagination, type FeedSortBy, type FeedSortDir } from "../api";
+import { Button, Select, StatusBadge } from "../components/ui";
 import { PlusIcon, PencilIcon, CopyIcon, TrashIcon, CheckIcon, RefreshIcon } from "../components/icons";
 import FeedEditorModal from "./FeedEditorPage";
 
@@ -8,9 +8,34 @@ function feedUrlForCurrentOrigin(feed: Feed): string {
   return new URL(`/f/${encodeURIComponent(feed.random_slug)}.xml`, window.location.origin).toString();
 }
 
+const PAGE_SIZE_OPTIONS = [10, 25, 50];
+
+const SORT_OPTIONS: Array<{ value: FeedSortBy; label: string }> = [
+  { value: "created_at", label: "Created" },
+  { value: "updated_at", label: "Updated" },
+  { value: "title", label: "Title" },
+  { value: "item_count", label: "Items" },
+  { value: "last_sync", label: "Last sync" }
+];
+
+const DEFAULT_PAGINATION: FeedListPagination = {
+  page: 1,
+  page_size: PAGE_SIZE_OPTIONS[0],
+  total: 0,
+  total_pages: 1,
+  has_next: false,
+  has_previous: false
+};
+
 export default function FeedsPage({ onLogout }: { onLogout: () => void }) {
   const [feeds, setFeeds] = useState<Feed[]>([]);
+  const [pagination, setPagination] = useState<FeedListPagination>(DEFAULT_PAGINATION);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(PAGE_SIZE_OPTIONS[0]);
+  const [sortBy, setSortBy] = useState<FeedSortBy>("created_at");
+  const [sortDir, setSortDir] = useState<FeedSortDir>("desc");
   const [loading, setLoading] = useState(true);
+  const [listError, setListError] = useState("");
   const [toast, setToast] = useState("");
   const [syncingId, setSyncingId] = useState<number | null>(null);
   const [copiedId, setCopiedId] = useState<number | null>(null);
@@ -19,14 +44,20 @@ export default function FeedsPage({ onLogout }: { onLogout: () => void }) {
 
   const refresh = useCallback(async () => {
     try {
-      const result = await api.listFeeds();
+      const result = await api.listFeeds({ page, page_size: pageSize, sort_by: sortBy, sort_dir: sortDir });
+      if (result.pagination.total > 0 && result.pagination.page > result.pagination.total_pages) {
+        setPage(result.pagination.total_pages);
+        return;
+      }
       setFeeds(result.feeds);
+      setPagination(result.pagination);
+      setListError("");
     } catch {
-      // auth failure handled by app shell
+      setListError("Failed to load feeds.");
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [page, pageSize, sortBy, sortDir]);
 
   useEffect(() => {
     refresh();
@@ -55,7 +86,11 @@ export default function FeedsPage({ onLogout }: { onLogout: () => void }) {
     try {
       await api.deleteFeed(feed.id);
       showToast(`Deleted ${feed.title}`);
-      await refresh();
+      if (feeds.length === 1 && page > 1) {
+        setPage((current) => Math.max(1, current - 1));
+      } else {
+        await refresh();
+      }
     } catch (err) {
       showToast(err instanceof Error ? err.message : "Delete failed");
     }
@@ -83,7 +118,11 @@ export default function FeedsPage({ onLogout }: { onLogout: () => void }) {
 
   function handleEditorSaved() {
     closeEditor();
-    refresh();
+    if (page === 1) {
+      refresh();
+    } else {
+      setPage(1);
+    }
     showToast(editingFeedId ? "Feed updated" : "Feed created");
   }
 
@@ -112,13 +151,16 @@ export default function FeedsPage({ onLogout }: { onLogout: () => void }) {
     );
   }
 
+  const rangeStart = pagination.total === 0 || feeds.length === 0 ? 0 : (pagination.page - 1) * pagination.page_size + 1;
+  const rangeEnd = feeds.length === 0 ? 0 : Math.min(pagination.total, rangeStart + feeds.length - 1);
+
   return (
     <div className="app-content">
       <div className="page-header">
         <div>
           <h1>Feeds</h1>
           <div className="page-header-sub">
-            {feeds.length} configured feed rule{feeds.length === 1 ? "" : "s"}
+            {pagination.total} configured feed rule{pagination.total === 1 ? "" : "s"}
           </div>
         </div>
         <Button onClick={() => openEditor()}>
@@ -127,10 +169,65 @@ export default function FeedsPage({ onLogout }: { onLogout: () => void }) {
       </div>
 
       <div className="card" style={{ padding: 0, overflow: "hidden" }}>
+        {listError ? <div className="feed-list-error error-msg">{listError}</div> : null}
+        {pagination.total > 0 ? (
+          <div className="feed-toolbar">
+            <div className="feed-toolbar-summary">
+              Showing {rangeStart}-{rangeEnd} of {pagination.total}
+            </div>
+            <div className="feed-toolbar-controls">
+              <label className="feed-control">
+                <span>Sort</span>
+                <Select
+                  value={sortBy}
+                  aria-label="Sort feeds"
+                  onChange={(event) => {
+                    setPage(1);
+                    setSortBy(event.target.value as FeedSortBy);
+                  }}
+                >
+                  {SORT_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>{option.label}</option>
+                  ))}
+                </Select>
+              </label>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setPage(1);
+                  setSortDir((current) => current === "asc" ? "desc" : "asc");
+                }}
+                title="Toggle sort direction"
+              >
+                {sortDir === "asc" ? "Ascending" : "Descending"}
+              </Button>
+              <label className="feed-control">
+                <span>Rows</span>
+                <Select
+                  value={pageSize}
+                  aria-label="Feeds per page"
+                  onChange={(event) => {
+                    setPage(1);
+                    setPageSize(Number(event.target.value));
+                  }}
+                >
+                  {PAGE_SIZE_OPTIONS.map((option) => (
+                    <option key={option} value={option}>{option}</option>
+                  ))}
+                </Select>
+              </label>
+            </div>
+          </div>
+        ) : null}
         {feeds.length === 0 ? (
           <div className="empty-state">
-            <h3>No feeds yet</h3>
-            <p>Create a feed rule with IMAP settings and a recipient filter to get started.</p>
+            <h3>{pagination.total === 0 ? "No feeds yet" : "No feeds on this page"}</h3>
+            <p>
+              {pagination.total === 0
+                ? "Create a feed rule with IMAP settings and a recipient filter to get started."
+                : "Try the previous page or adjust the list controls."}
+            </p>
           </div>
         ) : (
           <div className="feed-list">
@@ -184,6 +281,29 @@ export default function FeedsPage({ onLogout }: { onLogout: () => void }) {
             ))}
           </div>
         )}
+        {pagination.total > 0 ? (
+          <div className="pagination-bar">
+            <span>Page {pagination.page} of {pagination.total_pages}</span>
+            <div className="pagination-actions">
+              <Button
+                variant="ghost"
+                size="sm"
+                disabled={!pagination.has_previous}
+                onClick={() => setPage((current) => Math.max(1, current - 1))}
+              >
+                Previous
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                disabled={!pagination.has_next}
+                onClick={() => setPage((current) => current + 1)}
+              >
+                Next
+              </Button>
+            </div>
+          </div>
+        ) : null}
       </div>
 
       {toast ? <div className="toast">{toast}</div> : null}

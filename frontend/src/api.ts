@@ -29,6 +29,34 @@ export type Feed = {
   item_count: number;
 };
 
+export type FeedSortBy = "created_at" | "updated_at" | "title" | "item_count" | "last_sync";
+export type FeedSortDir = "asc" | "desc";
+
+export type FeedListPagination = {
+  page: number;
+  page_size: number;
+  total: number;
+  total_pages: number;
+  has_next: boolean;
+  has_previous: boolean;
+};
+
+export type FeedListParams = {
+  page?: number;
+  page_size?: number;
+  sort_by?: FeedSortBy;
+  sort_dir?: FeedSortDir;
+};
+
+export type FeedListResponse = {
+  feeds: Feed[];
+  pagination: FeedListPagination;
+  sort: {
+    sort_by: FeedSortBy;
+    sort_dir: FeedSortDir;
+  };
+};
+
 export type FeedForm = {
   title: string;
   recipient: string;
@@ -77,6 +105,15 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   return response.json() as Promise<T>;
 }
 
+function queryString(params: FeedListParams): string {
+  const search = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== undefined) search.set(key, String(value));
+  }
+  const query = search.toString();
+  return query ? `?${query}` : "";
+}
+
 export const api = {
   me: () => request<{ authenticated: boolean }>("/api/auth/me"),
   login: (token: string) =>
@@ -85,7 +122,8 @@ export const api = {
       body: JSON.stringify({ token })
     }),
   logout: () => request<{ authenticated: boolean }>("/api/auth/logout", { method: "POST" }),
-  listFeeds: () => request<{ feeds: Feed[] }>("/api/feeds"),
+  listFeeds: (params: FeedListParams = {}) => request<FeedListResponse>(`/api/feeds${queryString(params)}`),
+  getFeed: (id: number) => request<{ feed: Feed }>(`/api/feeds/${id}`),
   createFeed: (feed: FeedForm) =>
     request<{ feed: Feed }>("/api/feeds", {
       method: "POST",

@@ -68,6 +68,25 @@ def build_settings(tmp_path: Path) -> Settings:
     )
 
 
+def seed_feed(store, title: str):
+    return store.create_feed(
+        {
+            "title": title,
+            "recipient": "target@example.test",
+            "imap_host": "imap.example.test",
+            "imap_port": 993,
+            "imap_tls": "ssl",
+            "imap_username": "user@example.test",
+            "imap_password_encrypted": "secret",
+            "folders": ["INBOX"],
+            "random_slug": f"slug-{title.lower()}",
+            "backfill_days": 30,
+            "retention_count": 50,
+            "sync_interval_minutes": 60,
+        }
+    )
+
+
 def test_login_sets_httponly_session_cookie(tmp_path: Path) -> None:
     settings = build_settings(tmp_path)
     app = create_app(settings=settings)
@@ -82,6 +101,33 @@ def test_login_sets_httponly_session_cookie(tmp_path: Path) -> None:
     assert SESSION_COOKIE in login.cookies
     assert "httponly" in login.headers["set-cookie"].lower()
     assert allowed.status_code == 200
+
+
+def test_list_feeds_paginates_and_sorts(tmp_path: Path) -> None:
+    settings = build_settings(tmp_path)
+    app = create_app(settings=settings)
+    seed_feed(app.state.store, "Charlie")
+    seed_feed(app.state.store, "Alpha")
+    seed_feed(app.state.store, "Bravo")
+
+    with TestClient(app) as client:
+        client.post("/api/auth/login", json={"token": "admin-token"})
+        first_page = client.get("/api/feeds?page=1&page_size=2&sort_by=title&sort_dir=asc")
+        second_page = client.get("/api/feeds?page=2&page_size=2&sort_by=title&sort_dir=asc")
+
+    assert first_page.status_code == 200
+    assert [feed["title"] for feed in first_page.json()["feeds"]] == ["Alpha", "Bravo"]
+    assert first_page.json()["pagination"] == {
+        "page": 1,
+        "page_size": 2,
+        "total": 3,
+        "total_pages": 2,
+        "has_next": True,
+        "has_previous": False,
+    }
+    assert second_page.status_code == 200
+    assert [feed["title"] for feed in second_page.json()["feeds"]] == ["Charlie"]
+    assert second_page.json()["pagination"]["has_previous"] is True
 
 
 def test_create_feed_runs_initial_sync(tmp_path: Path) -> None:
