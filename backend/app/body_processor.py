@@ -31,7 +31,6 @@ ALLOWED_TAGS = {
     "blockquote",
     "br",
     "code",
-    "div",
     "em",
     "figcaption",
     "figure",
@@ -48,14 +47,7 @@ ALLOWED_TAGS = {
     "ol",
     "p",
     "pre",
-    "span",
     "strong",
-    "table",
-    "tbody",
-    "td",
-    "th",
-    "thead",
-    "tr",
     "ul",
 }
 
@@ -63,8 +55,13 @@ ALLOWED_ATTRIBUTES = {
     "a": {"href", "title"},
     "img": {"src", "alt", "title", "width", "height"},
     "blockquote": {"cite"},
-    "*": {"class"},
 }
+
+LAYOUT_TAG_RE = re.compile(
+    r"</?(?:div|span|table|tbody|td|th|thead|tr)(?:\s[^>]*)?>",
+    flags=re.IGNORECASE,
+)
+CLASS_ATTRIBUTE_RE = re.compile(r"\sclass=(?:\"[^\"]*\"|'[^']*'|[^\s>]+)", flags=re.IGNORECASE)
 
 
 class BodyProcessor:
@@ -77,7 +74,9 @@ class BodyProcessor:
 
     def sanitize(self, raw_html: str) -> str:
         if nh3 is None:
-            return re.sub(r"<script.*?</script>", "", raw_html, flags=re.IGNORECASE | re.DOTALL)
+            without_scripts = re.sub(r"<script.*?</script>", "", raw_html, flags=re.IGNORECASE | re.DOTALL)
+            without_classes = CLASS_ATTRIBUTE_RE.sub("", without_scripts)
+            return LAYOUT_TAG_RE.sub("", without_classes)
         return nh3.clean(
             raw_html,
             tags=ALLOWED_TAGS,
