@@ -46,12 +46,8 @@ export default function FeedEditorModal({
     }
     if (!isEdit) return;
     setBusy("loading");
-    api.listFeeds().then((result) => {
-      const feed = result.feeds.find((f) => f.id === feedId);
-      if (!feed) {
-        onClose();
-        return;
-      }
+    api.getFeed(feedId).then((result) => {
+      const feed = result.feed;
       setExistingFeed(feed);
       setForm({
         title: feed.title,

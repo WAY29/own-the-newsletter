@@ -8,6 +8,14 @@ from typing import Any
 
 from .timeutil import iso_now, parse_iso, utc_now
 
+FEED_SORT_COLUMNS = {
+    "created_at": "fr.created_at",
+    "updated_at": "fr.updated_at",
+    "title": "LOWER(fr.title)",
+    "item_count": "COALESCE(item_counts.item_count, 0)",
+    "last_sync": "fr.last_sync_finished_at",
+}
+
 
 class MessageStore:
     def __init__(self, database_path: Path) -> None:
@@ -118,9 +126,45 @@ class MessageStore:
         with self.connect() as conn:
             conn.execute("DELETE FROM admin_sessions WHERE expires_at <= ?", (iso_now(),))
 
-    def list_feeds(self) -> list[sqlite3.Row]:
+    def list_feeds(
+        self,
+        *,
+        limit: int | None = None,
+        offset: int = 0,
+        sort_by: str = "created_at",
+        sort_dir: str = "desc",
+    ) -> list[sqlite3.Row]:
+        sort_column = FEED_SORT_COLUMNS.get(sort_by, FEED_SORT_COLUMNS["created_at"])
+        direction = "ASC" if sort_dir == "asc" else "DESC"
+        pagination_clause = ""
+        values: list[Any] = []
+        if limit is not None:
+            pagination_clause = "LIMIT ? OFFSET ?"
+            values.extend([limit, offset])
+        null_order = f"{sort_column} IS NULL"
         with self.connect() as conn:
-            return list(conn.execute("SELECT * FROM feed_rules ORDER BY created_at DESC, id DESC"))
+            return list(
+                conn.execute(
+                    f"""
+                    SELECT fr.*, COALESCE(item_counts.item_count, 0) AS item_count
+                    FROM feed_rules fr
+                    LEFT JOIN (
+                        SELECT feed_id, COUNT(*) AS item_count
+                        FROM feed_items
+                        WHERE archived = 0
+                        GROUP BY feed_id
+                    ) item_counts ON item_counts.feed_id = fr.id
+                    ORDER BY {null_order} ASC, {sort_column} {direction}, fr.id {direction}
+                    {pagination_clause}
+                    """,
+                    values,
+                )
+            )
+
+    def count_feeds(self) -> int:
+        with self.connect() as conn:
+            row = conn.execute("SELECT COUNT(*) FROM feed_rules").fetchone()
+            return row[0] if row else 0
 
     def get_feed(self, feed_id: int) -> sqlite3.Row | None:
         with self.connect() as conn:
@@ -382,4 +426,3 @@ def folders_from_row(feed: sqlite3.Row | dict[str, Any]) -> list[str]:
         parsed = json.loads(raw)
         return [str(item) for item in parsed]
     return [str(item) for item in raw]
-

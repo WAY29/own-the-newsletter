@@ -6,9 +6,9 @@ import logging
 from pathlib import Path
 import secrets
 from time import perf_counter
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 
-from fastapi import Cookie, Depends, FastAPI, HTTPException, Request, Response
+from fastapi import Cookie, Depends, FastAPI, HTTPException, Query, Request, Response
 from fastapi.responses import FileResponse
 
 from .body_processor import BodyProcessor
@@ -25,6 +25,8 @@ from .timeutil import iso_now, parse_iso, utc_now
 
 SESSION_COOKIE = "onn_session"
 logger = logging.getLogger(__name__)
+FeedSortBy = Literal["created_at", "updated_at", "title", "item_count", "last_sync"]
+SortDir = Literal["asc", "desc"]
 
 
 def create_app(settings: Settings | None = None, imap_source: ImapSource | None = None) -> FastAPI:
@@ -133,10 +135,33 @@ def create_app(settings: Settings | None = None, imap_source: ImapSource | None 
         return {"authenticated": True}
 
     @app.get("/api/feeds")
-    def list_feeds(_admin: bool = Depends(require_admin)) -> dict[str, Any]:
-        feeds = store.list_feeds()
-        counts = store.count_all_feed_items()
-        return {"feeds": [_serialize_feed(feed, settings, item_count=counts.get(feed["id"], 0)) for feed in feeds]}
+    def list_feeds(
+        page: Annotated[int, Query(ge=1)] = 1,
+        page_size: Annotated[int, Query(ge=1, le=100)] = 10,
+        sort_by: Annotated[FeedSortBy, Query()] = "created_at",
+        sort_dir: Annotated[SortDir, Query()] = "desc",
+        _admin: bool = Depends(require_admin),
+    ) -> dict[str, Any]:
+        total = store.count_feeds()
+        total_pages = max(1, (total + page_size - 1) // page_size)
+        feeds = store.list_feeds(
+            limit=page_size,
+            offset=(page - 1) * page_size,
+            sort_by=sort_by,
+            sort_dir=sort_dir,
+        )
+        return {
+            "feeds": [_serialize_feed(feed, settings, item_count=int(feed["item_count"])) for feed in feeds],
+            "pagination": {
+                "page": page,
+                "page_size": page_size,
+                "total": total,
+                "total_pages": total_pages,
+                "has_next": page < total_pages,
+                "has_previous": page > 1,
+            },
+            "sort": {"sort_by": sort_by, "sort_dir": sort_dir},
+        }
 
     @app.post("/api/feeds/preview")
     def preview_feed(payload: PreviewRequest, _admin: bool = Depends(require_admin)) -> dict[str, Any]:

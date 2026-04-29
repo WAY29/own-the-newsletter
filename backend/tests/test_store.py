@@ -73,3 +73,20 @@ def test_delete_feed_cleans_only_orphan_messages(tmp_path: Path) -> None:
     remaining = store.list_feed_items(second["id"], include_archived=True)
     assert [row["uid"] for row in remaining] == [1]
 
+
+def test_list_feeds_sorts_by_visible_item_count(tmp_path: Path) -> None:
+    store = MessageStore(tmp_path / "test.sqlite")
+    store.init_db()
+    low = create_feed(store, "low")
+    high = create_feed(store, "high")
+    first_message = add_message(store, 1, "2026-04-29T00:00:00+00:00")
+    second_message = add_message(store, 2, "2026-04-29T01:00:00+00:00")
+    store.link_feed_item(low["id"], first_message)
+    store.link_feed_item(high["id"], first_message)
+    store.link_feed_item(high["id"], second_message)
+
+    feeds = store.list_feeds(limit=1, sort_by="item_count", sort_dir="desc")
+
+    assert store.count_feeds() == 2
+    assert feeds[0]["title"] == "high"
+    assert feeds[0]["item_count"] == 2
