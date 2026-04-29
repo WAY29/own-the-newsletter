@@ -2,15 +2,15 @@
 
 ## Problem Statement
 
-用户想把 newsletter 从邮箱阅读流里抽出来，用 RSS 阅读器统一阅读。参考项目 `kill-the-newsletter` 通过托管邮件服务生成收件地址，但本项目不想部署 SMTP/邮件服务，而是读取用户已有 IMAP 邮箱，把匹配指定收件人的邮件转换成本地 RSS feed。
+用户想把 newsletter 从邮箱阅读流里抽出来，用 RSS 阅读器统一阅读。参考项目 `kill-the-newsletter` 通过托管邮件服务生成收件地址，但本项目不想部署 SMTP/邮件服务，而是读取用户已有 IMAP 邮箱，把匹配指定发件来源的邮件转换成本地 RSS feed。
 
-用户需要一个个人自托管工具，能在个人电脑或服务器上运行，通过 Web 管理面板配置每个 feed 的 IMAP 凭据、收件人规则、同步文件夹、保留数量和同步设置，并把生成的 RSS 通过随机 URL 暴露给 feed reader。
+用户需要一个个人自托管工具，能在个人电脑或服务器上运行，通过 Web 管理面板配置每个 feed 的 IMAP 凭据、发件来源规则、同步文件夹、保留数量和同步设置，并把生成的 RSS 通过随机 URL 暴露给 feed reader。
 
 ## Solution
 
 第一版实现一个 Docker Compose 部署的个人 RSS 转换服务。后端使用 Python + FastAPI，负责管理员认证、feed 配置 API、IMAP 同步、邮件解析、正文清洗、RSS 文件生成和 RSS endpoint。前端使用 React + Vite + shadcn/ui，作为独立 Admin Panel 访问后端 API。生产环境通过 Nginx 暴露同源 URL：`/admin` 给管理面板，`/api` 给管理 API，`/f/{random}.xml` 给 RSS feed。
 
-每个 Feed Rule 自带 IMAP 凭据、同步文件夹和收件人过滤规则。同步过程只读 IMAP，不标记已读、不移动、不删除邮件。匹配到的邮件会存为 Imported Message，并通过 Feed Item 关联到对应 RSS Feed。RSS 默认输出清洗后的 HTML 正文，`?body=raw` 输出原始 HTML。RSS item 的 `description` 放摘要，`content:encoded` 放正文。
+每个 Feed Rule 自带 IMAP 凭据、同步文件夹和发件来源过滤规则。同步过程只读 IMAP，不标记已读、不移动、不删除邮件。匹配到的邮件会存为 Imported Message，并通过 Feed Item 关联到对应 RSS Feed。RSS 默认输出清洗后的 HTML 正文，`?body=raw` 输出原始 HTML。RSS item 的 `description` 放摘要，`content:encoded` 放正文。
 
 ## User Stories
 
@@ -24,10 +24,10 @@
 8. As an administrator, I want the encryption key provided through runtime configuration, so that login token rotation does not affect credential decryption.
 9. As an administrator, I want each feed to choose one or more IMAP folders, so that different feeds can read from `INBOX`, newsletter folders, or service-specific folders.
 10. As an administrator, I want `INBOX` to be the default folder, so that common setup is fast.
-11. As an administrator, I want to configure a recipient address per feed, so that only messages sent to that address appear in the RSS feed.
-12. As an administrator, I want recipient matching to check `To`, `Cc`, `Delivered-To`, and `X-Original-To`, so that IMAP-based filtering works across common mailbox providers.
-13. As an administrator, I want recipient matching to be case-insensitive exact address matching, so that capitalization does not break matching while plus aliases are not guessed.
-14. As an administrator, I want a preview of recent matching emails before saving a feed, so that I can confirm the recipient rule works.
+11. As an administrator, I want to configure a sender/source filter per feed, so that only messages from matching newsletter sources appear in the RSS feed.
+12. As an administrator, I want sender/source matching to check `From`, `Sender`, `Send`, `Reply-To`, and `Return-Path`, so that IMAP-based filtering works across common newsletter headers.
+13. As an administrator, I want sender/source matching to lowercase both sides and use substring containment, so that display names and sender addresses can both be used.
+14. As an administrator, I want a preview of recent matching emails before saving a feed, so that I can confirm the sender/source rule works.
 15. As an administrator, I want preview to allow zero matches, so that I can create feeds for newsletters that have not sent mail yet.
 16. As an administrator, I want to choose a human-readable feed title, so that the RSS reader shows a useful subscription name.
 17. As an administrator, I want feed edits to preserve existing items, so that changing future matching behavior does not erase history.
@@ -79,7 +79,7 @@
 - Use login-to-session-cookie flow for the Admin Panel.
 - Store server-side admin sessions with 30-day default expiry.
 - Encrypt stored IMAP credentials using a startup-provided secret key.
-- Treat each Feed Rule as feed-scoped configuration containing IMAP settings, sync folders, recipient filter, backfill window, retention, schedule, and feed title.
+- Treat each Feed Rule as feed-scoped configuration containing IMAP settings, sync folders, sender/source filter, backfill window, retention, schedule, and feed title.
 - Validate IMAP host, TLS, login, and folders before saving a feed.
 - Support rule preview by scanning recent messages and showing match count and sample subjects.
 - Keep Feed Rules independent; matching one rule never prevents matching another.
@@ -116,7 +116,7 @@
 
 Recommended deep modules:
 
-- `RecipientMatcher`: parses recipient-like headers and applies exact case-insensitive matching.
+- `SenderMatcher`: checks sender/source headers with lowercase substring matching.
 - `ImapSource`: validates IMAP settings, lists folders, fetches messages, and exposes stable message identities.
 - `SyncEngine`: coordinates backfill, cursors, sync locks, mailbox sync groups, matching, and status updates.
 - `MessageStore`: owns SQLite persistence for feed rules, imported messages, feed items, archived items, sessions, and sync state.
@@ -132,7 +132,7 @@ Recommended deep modules:
 
 - Good tests should verify external behavior and stable contracts, not implementation details.
 - Tests should focus on pure modules first, especially matching, body processing, RSS rendering, retention behavior, and sync orchestration.
-- Recipient matching tests should cover `To`, `Cc`, `Delivered-To`, `X-Original-To`, display names, mixed case, exact matching, and no plus-alias normalization.
+- Sender/source matching tests should cover `From`, `Sender`, `Send`, `Reply-To`, `Return-Path`, display names, mixed case, and substring containment.
 - Body processing tests should cover HTML input, text fallback, sanitization, raw mode preservation, summary length, HTML entity handling, and remote image preservation.
 - RSS rendering tests should cover valid RSS XML, `description`, `content:encoded`, stable `guid`, item ordering, author, pubDate fallback, clean mode, and raw mode.
 - Message store tests should cover one Imported Message linked to multiple Feed Items, archived Feed Items, retention visibility, feed deletion, and orphan cleanup.
@@ -164,7 +164,7 @@ Recommended deep modules:
 - Full historical mailbox import by default.
 - Full detailed debug logging of message content or secrets.
 - Public indexing of RSS URLs.
-- Plus-alias recipient normalization.
+- Plus-alias normalization for sender filters.
 
 ## Further Notes
 

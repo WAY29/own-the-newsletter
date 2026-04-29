@@ -23,8 +23,8 @@ def message_bytes(uid: int, recipient: str, subject: str, sender: str = "sender@
 class FakeImapSource:
     def __init__(self) -> None:
         self.messages = [
-            FetchedMessage("INBOX", "1", 1, message_bytes(1, "target@example.test", "One")),
-            FetchedMessage("INBOX", "1", 2, message_bytes(2, "other@example.test", "Two")),
+            FetchedMessage("INBOX", "1", 1, message_bytes(1, "mailbox@example.test", "One", sender="Target@Example.Test")),
+            FetchedMessage("INBOX", "1", 2, message_bytes(2, "target@example.test", "Two", sender="other@example.test")),
         ]
         self.fetch_calls = []
 
@@ -92,18 +92,17 @@ def test_preview_allows_matches_without_saving(tmp_path: Path) -> None:
 
     assert result["match_count"] == 1
     assert result["scanned_count"] == 2
-    assert result["sender_only_count"] == 0
     assert result["samples"][0]["subject"] == "One"
 
 
-def test_preview_reports_sender_only_messages(tmp_path: Path) -> None:
+def test_preview_ignores_recipient_only_messages(tmp_path: Path) -> None:
     engine, _store, source, _feed = build_engine(tmp_path)
     source.messages = [
         FetchedMessage(
             "INBOX",
             "1",
             3,
-            message_bytes(3, "mailbox@example.test", "Sender Only", sender="target@example.test"),
+            message_bytes(3, "target@example.test", "Recipient Only", sender="other@example.test"),
         )
     ]
 
@@ -126,7 +125,6 @@ def test_preview_reports_sender_only_messages(tmp_path: Path) -> None:
 
     assert result["match_count"] == 0
     assert result["scanned_count"] == 1
-    assert result["sender_only_count"] == 1
 
 
 def test_sync_imports_matching_messages_and_uses_cursor_incrementally(tmp_path: Path) -> None:

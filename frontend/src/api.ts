@@ -45,7 +45,6 @@ export type FeedForm = {
 export type PreviewResult = {
   match_count: number;
   scanned_count: number;
-  sender_only_count: number;
   samples: Array<{
     folder: string;
     uid: string;

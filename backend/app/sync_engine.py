@@ -15,12 +15,7 @@ from .email_parser import ParsedEmail, parse_email
 from .feed_publisher import FeedPublisher
 from .imap_source import FetchedMessage, ImapConfig, ImapSource, backfill_since
 from .logging_config import safe_log_text
-from .recipient_matcher import (
-    extract_addresses,
-    extract_recipient_addresses,
-    matches_recipient,
-    normalize_address,
-)
+from .sender_matcher import extract_source_values, matches_source, normalize_match_text
 from .security import CredentialCipher, redact_sensitive
 from .store import MessageStore, folders_from_row
 from .timeutil import parse_iso, utc_now
@@ -65,7 +60,7 @@ class SyncEngine:
         self.imap_source.validate(config)
 
     def preview(self, data: dict[str, Any]) -> dict[str, Any]:
-        target = normalize_address(data["recipient"])
+        target = normalize_match_text(data["recipient"])
         config = self._imap_config_from_mapping(data, password=data["imap_password"])
         logger.info(
             "Preview started target=%s host=%s port=%s tls=%s username=%s folders=%s limit_per_folder=%s",
@@ -80,31 +75,19 @@ class SyncEngine:
         self.imap_source.validate(config)
         messages = self.imap_source.preview_messages(config, limit_per_folder=int(data.get("limit_per_folder", 50)))
         samples: list[dict[str, str]] = []
-        sender_only_count = 0
         mismatch_debug_count = 0
         for message in messages:
             parsed = parse_email(message.raw_bytes)
-            if not matches_recipient(parsed.recipient_headers, data["recipient"]):
-                sender_addresses = extract_addresses([parsed.author]) if parsed.author else set()
-                if target in sender_addresses:
-                    sender_only_count += 1
-                    logger.info(
-                        "Preview target matched sender only folder=%s uid=%s subject=%s sender=%s recipients=%s",
-                        safe_log_text(message.folder),
-                        message.uid,
-                        safe_log_text(parsed.subject),
-                        redact_sensitive(parsed.author),
-                        _safe_addresses(extract_recipient_addresses(parsed.recipient_headers)),
-                    )
-                elif mismatch_debug_count < 5:
+            if not matches_source(parsed.source_headers, data["recipient"]):
+                if mismatch_debug_count < 5:
                     mismatch_debug_count += 1
                     logger.debug(
-                        "Preview skipped non-matching message folder=%s uid=%s subject=%s sender=%s recipients=%s",
+                        "Preview skipped non-matching message folder=%s uid=%s subject=%s sender=%s sources=%s",
                         safe_log_text(message.folder),
                         message.uid,
                         safe_log_text(parsed.subject),
                         redact_sensitive(parsed.author),
-                        _safe_addresses(extract_recipient_addresses(parsed.recipient_headers)),
+                        _safe_values(extract_source_values(parsed.source_headers)),
                     )
                 continue
             samples.append(
@@ -117,17 +100,15 @@ class SyncEngine:
                 }
             )
         logger.info(
-            "Preview finished target=%s scanned=%s matches=%s sender_only=%s",
+            "Preview finished target=%s scanned=%s matches=%s",
             redact_sensitive(target),
             len(messages),
             len(samples),
-            sender_only_count,
         )
         return {
             "match_count": len(samples),
             "samples": samples[:10],
             "scanned_count": len(messages),
-            "sender_only_count": sender_only_count,
         }
 
     def sync_feed(self, feed_id: int, *, manual: bool) -> SyncResult:
@@ -287,7 +268,7 @@ class SyncEngine:
                     if parsed is None:
                         parsed = parse_email(message.raw_bytes)
                         parsed_cache[cache_key] = parsed
-                    if not matches_recipient(parsed.recipient_headers, feed["recipient"]):
+                    if not matches_source(parsed.source_headers, feed["recipient"]):
                         totals[int(feed["id"])]["skipped"] += 1
                         continue
                     processed = body_cache.get(cache_key)
@@ -334,7 +315,7 @@ class SyncEngine:
         skipped = 0
         for message in messages:
             parsed = parse_email(message.raw_bytes)
-            if not matches_recipient(parsed.recipient_headers, feed["recipient"]):
+            if not matches_source(parsed.source_headers, feed["recipient"]):
                 skipped += 1
                 continue
             processed = self.body_processor.process(parsed.raw_html)
@@ -448,5 +429,5 @@ class SyncEngine:
             return lock
 
 
-def _safe_addresses(addresses: set[str]) -> list[str]:
-    return sorted(redact_sensitive(address) for address in addresses)
+def _safe_values(values: list[str]) -> list[str]:
+    return sorted(redact_sensitive(value) for value in values)

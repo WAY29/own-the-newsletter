@@ -4,9 +4,9 @@ Own New Newsletter converts messages fetched from a user's IMAP mailbox into loc
 
 ## Language
 
-**Recipient Filter**:
-A rule that admits an email when its recipient-like headers contain a case-insensitive exact match for the configured target address.
-_Avoid_: Envelope recipient, SMTP recipient, plus-alias normalization
+**Sender Filter**:
+A rule that admits an email when source headers contain the configured text after both sides are lowercased.
+_Avoid_: Recipient filter, exact address-only matching, plus-alias normalization
 
 **IMAP Account**:
 A configured mailbox connection used as the source for **Read-only Sync**.
@@ -53,7 +53,7 @@ Startup settings provided through environment variables or `.env`, including ser
 _Avoid_: Feed configuration file, CLI-only configuration
 
 **Feed Rule**:
-A per-feed configuration entry that combines one **IMAP Account**, one or more **Sync Folders**, and one **Recipient Filter** to produce one local RSS feed.
+A per-feed configuration entry that combines one **IMAP Account**, one or more **Sync Folders**, and one **Sender Filter** to produce one local RSS feed.
 _Avoid_: Account feed, folder feed
 
 **Rule Edit**:
@@ -78,7 +78,7 @@ _Avoid_: Atom feed
 
 **Feed Title**:
 A human-readable title chosen in the **Admin Panel** for one **RSS Feed**.
-_Avoid_: Recipient address as title
+_Avoid_: Sender address as title
 
 **Local Feed File**:
 An RSS XML file written to local storage for one **RSS Feed**.
@@ -208,8 +208,8 @@ _Avoid_: Deleted feed item
 - A **Feed Rule** has exactly one **IMAP Account**
 - A **Feed Rule** has one or more **Sync Folders**
 - Multiple **Feed Rules** with identical **IMAP Account** and **Sync Folders** can share one **Mailbox Sync Group**
-- A **Recipient Filter** is evaluated against email headers such as `To`, `Cc`, `Delivered-To`, and `X-Original-To`
-- A **Feed Rule** has exactly one **Recipient Filter**
+- A **Sender Filter** is evaluated against email headers such as `From`, `Sender`, `Send`, `Reply-To`, and `Return-Path`
+- A **Feed Rule** has exactly one **Sender Filter**
 - A **Feed Rule** is an **Independent Feed Rule**
 - A **Rule Edit** preserves existing **Feed Items**
 - A proposed **Feed Rule** can be checked with one **Rule Preview**
@@ -248,10 +248,10 @@ _Avoid_: Deleted feed item
 
 ## Example dialogue
 
-> **Dev:** "Does the **Recipient Filter** mean the exact SMTP envelope recipient?"
-> **Domain expert:** "No - in IMAP we only get mailbox messages, so the filter checks recipient-like headers as a best-effort match."
-> **Dev:** "Does `user+tag@example.com` match a filter for `user@example.com`?"
-> **Domain expert:** "No - **Recipient Filter** matching is case-insensitive but otherwise exact."
+> **Dev:** "Does the **Sender Filter** mean the exact SMTP envelope sender?"
+> **Domain expert:** "No - it checks source headers such as `From`, `Sender`, `Send`, `Reply-To`, and `Return-Path` with lowercase substring matching."
+> **Dev:** "Can I filter by a display name instead of an email address?"
+> **Domain expert:** "Yes - **Sender Filter** matching is lowercased containment against the raw source header values."
 > **Dev:** "Do we add a new feed by editing the configuration file?"
 > **Domain expert:** "No - use the **Admin Panel**; **Runtime Configuration** only contains startup-level settings and secrets."
 > **Dev:** "Can an administrator test a feed without waiting for the schedule?"
@@ -277,15 +277,15 @@ _Avoid_: Deleted feed item
 > **Dev:** "Can an unreachable mailbox configuration be saved for later?"
 > **Domain expert:** "No - a saved **IMAP Account** must be a **Verified IMAP Account**."
 > **Dev:** "If one IMAP mailbox receives newsletters for two aliases, do we make one combined feed?"
-> **Domain expert:** "No - each **Feed Rule** maps one target recipient to one **RSS Feed**."
+> **Domain expert:** "No - each **Feed Rule** maps one sender/source filter to one **RSS Feed**."
 > **Dev:** "Must a new **Feed Rule** match existing mail before it can be saved?"
 > **Domain expert:** "No - show a **Rule Preview**, but allow rules for future newsletters."
-> **Dev:** "If the administrator edits the recipient filter, do old items disappear?"
+> **Dev:** "If the administrator edits the sender filter, do old items disappear?"
 > **Domain expert:** "No - a **Rule Edit** keeps existing **Feed Items** and affects future sync only."
 > **Dev:** "If one email matches two **Feed Rules**, does the first rule consume it?"
 > **Domain expert:** "No - every **Independent Feed Rule** receives all of its matching emails."
 > **Dev:** "If two feeds use the same mailbox credentials, do they share one account configuration?"
-> **Domain expert:** "No - each **Feed Rule** carries its own **IMAP Account**, **Sync Folders**, and **Recipient Filter**."
+> **Domain expert:** "No - each **Feed Rule** carries its own **IMAP Account**, **Sync Folders**, and **Sender Filter**."
 > **Dev:** "Does that mean we log into the same mailbox once for every feed?"
 > **Domain expert:** "No - the UI stays feed-scoped, but the synchronizer may use a **Mailbox Sync Group** to scan identical mailbox sources once."
 > **Dev:** "After importing an email, should we mark it as read?"
@@ -318,7 +318,7 @@ _Avoid_: Deleted feed item
 > **Domain expert:** "No - a **Feed Item** uses `description` for the summary and `content:encoded` for the full body."
 > **Dev:** "Can RSS `guid` use the email `Message-ID`?"
 > **Domain expert:** "No - **Item GUID** is derived from the local **Feed Item** identity so it is stable per feed."
-> **Dev:** "Should the feed title default to the recipient address?"
+> **Dev:** "Should the feed title default to the sender address?"
 > **Domain expert:** "No - the administrator chooses a **Feed Title**; each **Item Title** comes from the email subject."
 > **Dev:** "Is the **IMAP Account** the RSS item author?"
 > **Domain expert:** "No - **Item Author** comes from the email `From` header."
@@ -343,8 +343,8 @@ _Avoid_: Deleted feed item
 
 ## Flagged ambiguities
 
-- "筛选收件人" was resolved as **Recipient Filter** based on recipient-like headers, not strict SMTP envelope delivery metadata.
-- "收件人匹配" is case-insensitive exact address matching; plus aliases are not normalized.
+- "筛选收件人" was corrected to **Sender Filter** based on source headers, not recipient-like delivery headers.
+- "发件来源匹配" lowercases both sides and uses substring containment; plus aliases are not normalized.
 - "用户提供IMAP相关凭据" is resolved as configuring a per-feed **IMAP Account** through the **Admin Panel**, not creating an application user account.
 - "保存 IMAP 账号" means saving a **Verified IMAP Account**, not merely storing typed fields.
 - "配置文件" is not the source of truth for RSS/feed configuration; **Runtime Configuration** comes from environment variables or `.env`.
@@ -361,13 +361,13 @@ _Avoid_: Deleted feed item
 - "IMAP 密码加密" uses a separate **Secret Key**, not the **Admin Token**.
 - "RSS feed的访问不需要token" is resolved as **Random Feed URL** access without an additional feed token.
 - "RSS订阅" is intentionally **RSS Feed** for this project; the reference project's Atom feed format is not the default terminology here.
-- Current MVP scope: **Feed Rules** only support recipient-based filtering.
-- "收件人规则" is feed-scoped; each **Feed Rule** carries its own mailbox credentials, **Sync Folders**, and **Recipient Filter**.
+- Current MVP scope: **Feed Rules** support sender/source-based filtering.
+- "发件来源规则" is feed-scoped; each **Feed Rule** carries its own mailbox credentials, **Sync Folders**, and **Sender Filter**.
 - "编辑 Feed Rule" preserves existing **Feed Items** and does not rebuild history.
 - "启用/禁用 Feed" is out of first-version scope; feed lifecycle is create, edit, delete, and sync.
 - "重复邮箱" is optimized internally with **Mailbox Sync Groups**, without making shared account configuration visible in the product model.
 - "多个 Feed 之间相互独立" means **Independent Feed Rules**; matching one feed does not remove the email from another feed.
-- "规则预览" helps validate **Recipient Filter** behavior but does not require an existing matched email.
+- "规则预览" helps validate **Sender Filter** behavior but does not require an existing matched email.
 - "已处理" is local processing state only; it must not imply mailbox flags, folder moves, or deletion.
 - "收到" does not imply realtime push; imports happen on the configured **Sync Schedule**.
 - "后台同步" is owned by the **Backend Scheduler** in the FastAPI process for the first version.

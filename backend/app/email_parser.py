@@ -8,7 +8,7 @@ from email.parser import BytesParser
 from email.utils import parsedate_to_datetime
 
 from .body_processor import plain_text_to_html
-from .recipient_matcher import message_recipient_headers
+from .sender_matcher import message_source_headers
 from .timeutil import iso_now, utc_now
 
 
@@ -18,7 +18,7 @@ class ParsedEmail:
     author: str
     published_at: str
     message_id: str
-    recipient_headers: dict[str, list[str]]
+    source_headers: dict[str, list[str]]
     raw_html: str
 
 
@@ -34,7 +34,7 @@ def parse_email(raw_bytes: bytes) -> ParsedEmail:
         author=author,
         published_at=published_at,
         message_id=message_id,
-        recipient_headers=message_recipient_headers(message),
+        source_headers=message_source_headers(message),
         raw_html=raw_html,
     )
 
@@ -90,4 +90,3 @@ def _decode_part(part: EmailMessage) -> str:
         return content if isinstance(content, str) else str(content)
     charset = part.get_content_charset() or "utf-8"
     return payload.decode(charset, errors="replace")
-

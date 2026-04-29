@@ -158,7 +158,7 @@ function Dashboard({
           {feeds.length === 0 ? (
             <Card className="empty-state">
               <h3>No feeds yet</h3>
-              <p>Create a feed rule with IMAP settings and a recipient address. Preview can return zero matches.</p>
+              <p>Create a feed rule with IMAP settings and a sender filter. Preview can return zero matches.</p>
             </Card>
           ) : (
             feeds.map((feed) => (
@@ -328,8 +328,8 @@ function FeedEditor({
             <Input value={form.title} onChange={(event) => patch({ title: event.target.value })} required />
           </Field>
           <Field
-            label="Recipient filter"
-            hint="Matches the address the newsletter was sent to in To, Cc, Delivered-To, or X-Original-To. It does not match the sender/From address."
+            label="Sender filter"
+            hint="Matches when From, Sender, Send, Reply-To, or Return-Path contains this text after lowercasing both sides."
           >
             <Input value={form.recipient} onChange={(event) => patch({ recipient: event.target.value })} required />
           </Field>
@@ -409,9 +409,6 @@ function Preview({ result }: { result: PreviewResult }) {
       <strong>{result.match_count} matching message{result.match_count === 1 ? "" : "s"}</strong>
       <p>
         Scanned {result.scanned_count} recent message{result.scanned_count === 1 ? "" : "s"}.
-        {result.sender_only_count > 0
-          ? ` ${result.sender_only_count} had this address as the sender only, not as a recipient.`
-          : ""}
       </p>
       {result.samples.length > 0 ? (
         <ul>
@@ -423,7 +420,7 @@ function Preview({ result }: { result: PreviewResult }) {
           ))}
         </ul>
       ) : (
-        <p>Zero matches is allowed. Save the feed if this recipient is intended for future newsletters.</p>
+        <p>Zero matches is allowed. Save the feed if this sender is intended for future newsletters.</p>
       )}
     </div>
   );

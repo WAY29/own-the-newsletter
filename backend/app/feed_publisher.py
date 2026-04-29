@@ -53,9 +53,8 @@ class FeedPublisher:
             RssFeed(
                 title=feed["title"],
                 link=feed_url,
-                description=f"Messages matching {feed['recipient']}",
+                description=f"Messages from sources matching {feed['recipient']}",
                 items=items,
             )
         )
         self.feed_path(slug, raw=raw).write_text(rss, encoding="utf-8")
-
