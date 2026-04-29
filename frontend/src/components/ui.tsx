@@ -1,20 +1,21 @@
 import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode, SelectHTMLAttributes, TextareaHTMLAttributes } from "react";
 
-type PropsWithChildren = {
-  children: ReactNode;
-  className?: string;
-};
-
-export function Card({ children, className = "" }: PropsWithChildren) {
-  return <section className={`card ${className}`}>{children}</section>;
-}
-
-export function Button({ className = "", ...props }: ButtonHTMLAttributes<HTMLButtonElement>) {
-  return <button className={`button ${className}`} {...props} />;
-}
-
-export function GhostButton({ className = "", ...props }: ButtonHTMLAttributes<HTMLButtonElement>) {
-  return <button className={`button ghost ${className}`} {...props} />;
+export function Button({
+  variant = "primary",
+  size,
+  className = "",
+  ...props
+}: ButtonHTMLAttributes<HTMLButtonElement> & {
+  variant?: "primary" | "ghost" | "danger" | "icon";
+  size?: "sm";
+}) {
+  const cls = [
+    "btn",
+    `btn-${variant}`,
+    size ? `btn-${size}` : "",
+    className
+  ].filter(Boolean).join(" ");
+  return <button className={cls} {...props} />;
 }
 
 export function Input({ className = "", ...props }: InputHTMLAttributes<HTMLInputElement>) {
@@ -22,7 +23,7 @@ export function Input({ className = "", ...props }: InputHTMLAttributes<HTMLInpu
 }
 
 export function Select({ className = "", ...props }: SelectHTMLAttributes<HTMLSelectElement>) {
-  return <select className={`input ${className}`} {...props} />;
+  return <select className={`input select ${className}`} {...props} />;
 }
 
 export function Textarea({ className = "", ...props }: TextareaHTMLAttributes<HTMLTextAreaElement>) {
@@ -32,18 +33,29 @@ export function Textarea({ className = "", ...props }: TextareaHTMLAttributes<HT
 export function Field({
   label,
   hint,
+  full,
   children
 }: {
   label: string;
   hint?: string;
+  full?: boolean;
   children: ReactNode;
 }) {
   return (
-    <label className="field">
-      <span>{label}</span>
+    <label className={`field ${full ? "field-full" : ""}`}>
+      <span className="field-label">{label}</span>
       {children}
-      {hint ? <small>{hint}</small> : null}
+      {hint ? <span className="field-hint">{hint}</span> : null}
     </label>
   );
 }
 
+export function StatusBadge({ status }: { status: string | null }) {
+  const label = status ?? "never";
+  return (
+    <span className={`status-badge status-${label}`}>
+      <span className="status-badge-dot" />
+      {label}
+    </span>
+  );
+}
