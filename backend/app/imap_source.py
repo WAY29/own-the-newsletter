@@ -5,6 +5,8 @@ from datetime import datetime, timedelta, timezone
 import imaplib
 from typing import Iterable
 
+_IMAP_CLIENT_ID = '("name" "Own New Newsletter" "version" "0.1.0" "vendor" "own-the-newsletter")'
+
 
 @dataclass(frozen=True)
 class ImapConfig:
@@ -66,9 +68,13 @@ class ImapSource:
         return _ImapSession(config)
 
     def _select_folder(self, client: imaplib.IMAP4, folder: str) -> str:
-        typ, _data = client.select(f'"{folder}"', readonly=True)
+        typ, data = client.select(f'"{folder}"', readonly=True)
         if typ != "OK":
-            raise RuntimeError(f"Could not select IMAP folder: {folder}")
+            detail = _format_imap_response(data)
+            message = f"Could not select IMAP folder: {folder}"
+            if detail:
+                message = f"{message} ({detail})"
+            raise RuntimeError(message)
         response = client.response("UIDVALIDITY")
         if response and response[1] and response[1][0]:
             value = response[1][0]
@@ -123,6 +129,7 @@ class _ImapSession:
             if tls == "starttls":
                 client.starttls()
         client.login(self._config.username, self._config.password)
+        self._identify_client(client)
         self._client = client
         return client
 
@@ -138,9 +145,28 @@ class _ImapSession:
         finally:
             self._client = None
 
+    def _identify_client(self, client: imaplib.IMAP4) -> None:
+        try:
+            client.xatom("ID", _IMAP_CLIENT_ID)
+        except imaplib.IMAP4.error:
+            return
+
 
 def backfill_since(days: int) -> datetime | None:
     if days <= 0:
         return None
     return datetime.now(timezone.utc) - timedelta(days=days)
 
+
+def _format_imap_response(data: Iterable[object] | None) -> str:
+    if not data:
+        return ""
+    parts: list[str] = []
+    for item in data:
+        if item is None:
+            continue
+        if isinstance(item, bytes):
+            parts.append(item.decode("utf-8", errors="replace"))
+        else:
+            parts.append(str(item))
+    return "; ".join(part for part in parts if part)
