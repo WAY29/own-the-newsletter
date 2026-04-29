@@ -4,7 +4,7 @@ import { Button, Field, Input, Modal, Select, Textarea } from "../components/ui"
 
 const emptyForm: FeedForm = {
   title: "",
-  recipient: "",
+  sender: "",
   imap_host: "",
   imap_port: 993,
   imap_tls: "ssl",
@@ -51,7 +51,7 @@ export default function FeedEditorModal({
       setExistingFeed(feed);
       setForm({
         title: feed.title,
-        recipient: feed.recipient,
+        sender: feed.sender,
         imap_host: feed.imap_host,
         imap_port: feed.imap_port,
         imap_tls: feed.imap_tls,
@@ -128,10 +128,10 @@ export default function FeedEditorModal({
                   required
                 />
               </Field>
-              <Field label="Recipient filter" hint="Case-insensitive exact match on To, Cc, Delivered-To, X-Original-To.">
+              <Field label="Sender filter">
                 <Input
-                  value={form.recipient}
-                  onChange={(e) => patch({ recipient: e.target.value })}
+                  value={form.sender}
+                  onChange={(e) => patch({ sender: e.target.value })}
                   placeholder="newsletter@example.com"
                   required
                 />

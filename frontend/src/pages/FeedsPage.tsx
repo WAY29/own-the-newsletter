@@ -224,7 +224,7 @@ export default function FeedsPage({ onLogout }: { onLogout: () => void }) {
             <h3>{pagination.total === 0 ? "No feeds yet" : "No feeds on this page"}</h3>
             <p>
               {pagination.total === 0
-                ? "Create a feed rule with IMAP settings and a recipient filter to get started."
+                ? "Create a feed rule with IMAP settings and a sender filter to get started."
                 : "Try the previous page or adjust the list controls."}
             </p>
           </div>
@@ -255,7 +255,7 @@ export default function FeedsPage({ onLogout }: { onLogout: () => void }) {
                     <td className="feed-td feed-td-title">
                       <div className="feed-cell-title">{feed.title}</div>
                       <div className="feed-cell-meta">
-                        <span>{feed.recipient}</span>
+                        <span>{feed.sender}</span>
                         {feed.folders.length > 0 && <span>{feed.folders.join(", ")}</span>}
                       </div>
                     </td>

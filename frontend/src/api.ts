@@ -11,7 +11,7 @@ export type SyncStatus = {
 export type Feed = {
   id: number;
   title: string;
-  recipient: string;
+  sender: string;
   imap_host: string;
   imap_port: number;
   imap_tls: "ssl" | "starttls" | "none";
@@ -59,7 +59,7 @@ export type FeedListResponse = {
 
 export type FeedForm = {
   title: string;
-  recipient: string;
+  sender: string;
   imap_host: string;
   imap_port: number;
   imap_tls: "ssl" | "starttls" | "none";

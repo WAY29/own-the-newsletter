@@ -13,7 +13,7 @@ class LoginRequest(BaseModel):
 
 
 class ImapPreviewBase(BaseModel):
-    recipient: str = Field(min_length=3, max_length=320)
+    sender: str = Field(min_length=3, max_length=320)
     imap_host: str = Field(min_length=1, max_length=255)
     imap_port: int = Field(default=993, ge=1, le=65535)
     imap_tls: ImapTls = "ssl"
@@ -26,10 +26,10 @@ class ImapPreviewBase(BaseModel):
         normalized = [folder.strip() for folder in folders if folder.strip()]
         return normalized or ["INBOX"]
 
-    @field_validator("recipient")
+    @field_validator("sender")
     @classmethod
-    def normalize_recipient(cls, recipient: str) -> str:
-        return recipient.strip()
+    def normalize_sender(cls, sender: str) -> str:
+        return sender.strip()
 
 
 class FeedBase(ImapPreviewBase):
@@ -45,7 +45,7 @@ class FeedCreate(FeedBase):
 
 class FeedUpdate(BaseModel):
     title: str | None = Field(default=None, min_length=1, max_length=200)
-    recipient: str | None = Field(default=None, min_length=3, max_length=320)
+    sender: str | None = Field(default=None, min_length=3, max_length=320)
     imap_host: str | None = Field(default=None, min_length=1, max_length=255)
     imap_port: int | None = Field(default=None, ge=1, le=65535)
     imap_tls: ImapTls | None = None
@@ -64,10 +64,10 @@ class FeedUpdate(BaseModel):
         normalized = [folder.strip() for folder in folders if folder.strip()]
         return normalized or ["INBOX"]
 
-    @field_validator("recipient")
+    @field_validator("sender")
     @classmethod
-    def normalize_recipient(cls, recipient: str | None) -> str | None:
-        return recipient.strip() if recipient is not None else None
+    def normalize_sender(cls, sender: str | None) -> str | None:
+        return sender.strip() if sender is not None else None
 
 
 class PreviewRequest(ImapPreviewBase):

@@ -11,7 +11,7 @@ def test_feed_publisher_writes_clean_and_raw_body_modes(tmp_path: Path) -> None:
     feed = store.create_feed(
         {
             "title": "Feed",
-            "recipient": "target@example.test",
+            "sender": "target@example.test",
             "imap_host": "imap.example.test",
             "imap_port": 993,
             "imap_tls": "ssl",

@@ -7,7 +7,7 @@ def create_feed(store: MessageStore, title: str = "Feed"):
     return store.create_feed(
         {
             "title": title,
-            "recipient": "target@example.test",
+            "sender": "target@example.test",
             "imap_host": "imap.example.test",
             "imap_port": 993,
             "imap_tls": "ssl",
@@ -90,3 +90,20 @@ def test_list_feeds_sorts_by_visible_item_count(tmp_path: Path) -> None:
     assert store.count_feeds() == 2
     assert feeds[0]["title"] == "high"
     assert feeds[0]["item_count"] == 2
+
+
+def test_init_db_renames_legacy_recipient_column_to_sender(tmp_path: Path) -> None:
+    database_path = tmp_path / "test.sqlite"
+    store = MessageStore(database_path)
+    store.init_db()
+
+    with store.connect() as conn:
+        conn.execute("ALTER TABLE feed_rules RENAME COLUMN sender TO recipient")
+
+    store.init_db()
+
+    with store.connect() as conn:
+        columns = [row["name"] for row in conn.execute("PRAGMA table_info(feed_rules)").fetchall()]
+
+    assert "sender" in columns
+    assert "recipient" not in columns

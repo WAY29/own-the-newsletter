@@ -53,7 +53,7 @@ class FeedPublisher:
             RssFeed(
                 title=feed["title"],
                 link=feed_url,
-                description=f"Messages from sources matching {feed['recipient']}",
+                description=f"Messages from sources matching {feed['sender']}",
                 items=items,
             )
         )

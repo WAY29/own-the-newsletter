@@ -35,7 +35,7 @@ class MessageStore:
                 CREATE TABLE IF NOT EXISTS feed_rules (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     title TEXT NOT NULL,
-                    recipient TEXT NOT NULL,
+                    sender TEXT NOT NULL,
                     imap_host TEXT NOT NULL,
                     imap_port INTEGER NOT NULL,
                     imap_tls TEXT NOT NULL,
@@ -101,6 +101,12 @@ class MessageStore:
                 );
                 """
             )
+            self._migrate_feed_rules_sender_column(conn)
+
+    def _migrate_feed_rules_sender_column(self, conn: sqlite3.Connection) -> None:
+        columns = {row["name"] for row in conn.execute("PRAGMA table_info(feed_rules)").fetchall()}
+        if "recipient" in columns and "sender" not in columns:
+            conn.execute("ALTER TABLE feed_rules RENAME COLUMN recipient TO sender")
 
     def create_session(self, hashed_token: str, expires_at: str) -> None:
         with self.connect() as conn:
@@ -180,7 +186,7 @@ class MessageStore:
             cursor = conn.execute(
                 """
                 INSERT INTO feed_rules(
-                    title, recipient, imap_host, imap_port, imap_tls, imap_username,
+                    title, sender, imap_host, imap_port, imap_tls, imap_username,
                     imap_password_encrypted, folders_json, random_slug, backfill_days,
                     retention_count, sync_interval_minutes, created_at, updated_at
                 )
@@ -188,7 +194,7 @@ class MessageStore:
                 """,
                 (
                     data["title"],
-                    data["recipient"],
+                    data["sender"],
                     data["imap_host"],
                     data["imap_port"],
                     data["imap_tls"],

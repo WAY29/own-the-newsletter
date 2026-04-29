@@ -72,7 +72,7 @@ def seed_feed(store, title: str):
     return store.create_feed(
         {
             "title": title,
-            "recipient": "target@example.test",
+            "sender": "target@example.test",
             "imap_host": "imap.example.test",
             "imap_port": 993,
             "imap_tls": "ssl",
@@ -137,7 +137,7 @@ def test_create_feed_runs_initial_sync(tmp_path: Path) -> None:
 
     payload = {
         "title": "Target Feed",
-        "recipient": "target@example.test",
+        "sender": "target@example.test",
         "imap_host": "imap.example.test",
         "imap_port": 993,
         "imap_tls": "ssl",
@@ -155,6 +155,8 @@ def test_create_feed_runs_initial_sync(tmp_path: Path) -> None:
 
     assert response.status_code == 200
     feed = response.json()["feed"]
+    assert feed["sender"] == "target@example.test"
+    assert "recipient" not in feed
     assert feed["sync_status"]["first_sync_completed"] is True
     assert feed["sync_status"]["last_sync_status"] == "success"
     assert feed["sync_status"]["last_sync_imported_count"] == 1
@@ -173,7 +175,7 @@ def test_preview_does_not_require_title(tmp_path: Path) -> None:
 
     payload = {
         "title": "",
-        "recipient": "target@example.test",
+        "sender": "target@example.test",
         "imap_host": "imap.example.test",
         "imap_port": 993,
         "imap_tls": "ssl",
@@ -193,3 +195,29 @@ def test_preview_does_not_require_title(tmp_path: Path) -> None:
     assert response.status_code == 200
     assert response.json()["match_count"] == 1
     assert response.json()["scanned_count"] == 2
+
+
+def test_update_feed_accepts_sender_field(tmp_path: Path) -> None:
+    settings = build_settings(tmp_path)
+    app = create_app(settings=settings, imap_source=FakeImapSource())
+    payload = {
+        "title": "Target Feed",
+        "sender": "target@example.test",
+        "imap_host": "imap.example.test",
+        "imap_port": 993,
+        "imap_tls": "ssl",
+        "imap_username": "user@example.test",
+        "imap_password": "password",
+        "folders": ["INBOX"],
+        "backfill_days": 30,
+        "retention_count": 50,
+        "sync_interval_minutes": 60,
+    }
+
+    with TestClient(app) as client:
+        client.post("/api/auth/login", json={"token": "admin-token"})
+        created = client.post("/api/feeds", json=payload)
+        response = client.put(f"/api/feeds/{created.json()['feed']['id']}", json={"sender": "other@example.test"})
+
+    assert response.status_code == 200
+    assert response.json()["feed"]["sender"] == "other@example.test"

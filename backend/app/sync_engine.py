@@ -60,7 +60,7 @@ class SyncEngine:
         self.imap_source.validate(config)
 
     def preview(self, data: dict[str, Any]) -> dict[str, Any]:
-        target = normalize_match_text(data["recipient"])
+        target = normalize_match_text(data["sender"])
         config = self._imap_config_from_mapping(data, password=data["imap_password"])
         logger.info(
             "Preview started target=%s host=%s port=%s tls=%s username=%s folders=%s limit_per_folder=%s",
@@ -78,7 +78,7 @@ class SyncEngine:
         mismatch_debug_count = 0
         for message in messages:
             parsed = parse_email(message.raw_bytes)
-            if not matches_source(parsed.source_headers, data["recipient"]):
+            if not matches_source(parsed.source_headers, data["sender"]):
                 if mismatch_debug_count < 5:
                     mismatch_debug_count += 1
                     logger.debug(
@@ -268,7 +268,7 @@ class SyncEngine:
                     if parsed is None:
                         parsed = parse_email(message.raw_bytes)
                         parsed_cache[cache_key] = parsed
-                    if not matches_source(parsed.source_headers, feed["recipient"]):
+                    if not matches_source(parsed.source_headers, feed["sender"]):
                         totals[int(feed["id"])]["skipped"] += 1
                         continue
                     processed = body_cache.get(cache_key)
@@ -315,7 +315,7 @@ class SyncEngine:
         skipped = 0
         for message in messages:
             parsed = parse_email(message.raw_bytes)
-            if not matches_source(parsed.source_headers, feed["recipient"]):
+            if not matches_source(parsed.source_headers, feed["sender"]):
                 skipped += 1
                 continue
             processed = self.body_processor.process(parsed.raw_html)

@@ -258,7 +258,7 @@ def _serialize_feed(feed, settings: Settings, *, item_count: int = 0) -> dict[st
     return {
         "id": feed["id"],
         "title": feed["title"],
-        "recipient": feed["recipient"],
+        "sender": feed["sender"],
         "imap_host": feed["imap_host"],
         "imap_port": feed["imap_port"],
         "imap_tls": feed["imap_tls"],
@@ -292,7 +292,7 @@ def _serialize_status(feed) -> dict[str, Any]:
 def _feed_row_to_validation_data(feed, cipher: CredentialCipher) -> dict[str, Any]:
     return {
         "title": feed["title"],
-        "recipient": feed["recipient"],
+        "sender": feed["sender"],
         "imap_host": feed["imap_host"],
         "imap_port": feed["imap_port"],
         "imap_tls": feed["imap_tls"],

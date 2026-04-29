@@ -54,7 +54,7 @@ def build_engine(tmp_path: Path):
     feed = store.create_feed(
         {
             "title": "Feed",
-            "recipient": "target@example.test",
+            "sender": "target@example.test",
             "imap_host": "imap.example.test",
             "imap_port": 993,
             "imap_tls": "ssl",
@@ -76,7 +76,7 @@ def test_preview_allows_matches_without_saving(tmp_path: Path) -> None:
     result = engine.preview(
         {
             "title": "Preview",
-            "recipient": "target@example.test",
+            "sender": "target@example.test",
             "imap_host": "imap.example.test",
             "imap_port": 993,
             "imap_tls": "ssl",
@@ -109,7 +109,7 @@ def test_preview_ignores_recipient_only_messages(tmp_path: Path) -> None:
     result = engine.preview(
         {
             "title": "Preview",
-            "recipient": "target@example.test",
+            "sender": "target@example.test",
             "imap_host": "imap.example.test",
             "imap_port": 993,
             "imap_tls": "ssl",
