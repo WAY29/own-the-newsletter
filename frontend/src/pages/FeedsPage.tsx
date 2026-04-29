@@ -4,6 +4,10 @@ import { Button, StatusBadge } from "../components/ui";
 import { PlusIcon, PencilIcon, CopyIcon, TrashIcon, CheckIcon, RefreshIcon } from "../components/icons";
 import FeedEditorModal from "./FeedEditorPage";
 
+function feedUrlForCurrentOrigin(feed: Feed): string {
+  return new URL(`/f/${encodeURIComponent(feed.random_slug)}.xml`, window.location.origin).toString();
+}
+
 export default function FeedsPage({ onLogout }: { onLogout: () => void }) {
   const [feeds, setFeeds] = useState<Feed[]>([]);
   const [loading, setLoading] = useState(true);
@@ -59,7 +63,7 @@ export default function FeedsPage({ onLogout }: { onLogout: () => void }) {
 
   async function handleCopy(feed: Feed) {
     try {
-      await navigator.clipboard.writeText(feed.feed_url);
+      await navigator.clipboard.writeText(feedUrlForCurrentOrigin(feed));
       setCopiedId(feed.id);
       setTimeout(() => setCopiedId(null), 2000);
     } catch {
