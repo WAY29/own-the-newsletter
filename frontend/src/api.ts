@@ -26,6 +26,7 @@ export type Feed = {
   created_at: string;
   updated_at: string;
   sync_status: SyncStatus;
+  item_count: number;
 };
 
 export type FeedForm = {

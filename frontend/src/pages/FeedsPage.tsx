@@ -66,6 +66,23 @@ export default function FeedsPage({ onLogout }: { onLogout: () => void }) {
     }
   }
 
+  function formatSyncTooltip(feed: Feed): string {
+    const parts: string[] = [];
+    if (feed.sync_status.last_sync_finished_at) {
+      parts.push(`Last sync: ${new Date(feed.sync_status.last_sync_finished_at).toLocaleString()}`);
+    }
+    if (feed.sync_status.last_sync_imported_count > 0) {
+      parts.push(`Imported: ${feed.sync_status.last_sync_imported_count}`);
+    }
+    if (feed.sync_status.last_sync_skipped_count > 0) {
+      parts.push(`Skipped: ${feed.sync_status.last_sync_skipped_count}`);
+    }
+    if (feed.sync_status.last_sync_error) {
+      parts.push(`Error: ${feed.sync_status.last_sync_error}`);
+    }
+    return parts.length > 0 ? parts.join("\n") : "Never synced";
+  }
+
   if (loading) {
     return (
       <div className="app-content">
@@ -102,15 +119,15 @@ export default function FeedsPage({ onLogout }: { onLogout: () => void }) {
                   <div className="feed-row-title">{feed.title}</div>
                   <div className="feed-row-meta">
                     <span>{feed.recipient}</span>
-                    <span>{feed.imap_username}@{feed.imap_host}</span>
                     <span>{feed.folders.join(", ")}</span>
                   </div>
                 </div>
-                <StatusBadge status={feed.sync_status.last_sync_status} />
+                <span className="feed-item-count" title="Feed items count">{feed.item_count} items</span>
+                <StatusBadge status={feed.sync_status.last_sync_status} tooltip={formatSyncTooltip(feed)} />
                 <div className="feed-row-actions">
                   <Button
                     variant="icon"
-                    title="Manual sync"
+                    title="Manually trigger a sync for this feed"
                     disabled={syncingId === feed.id}
                     onClick={() => handleSync(feed)}
                   >
@@ -118,14 +135,14 @@ export default function FeedsPage({ onLogout }: { onLogout: () => void }) {
                   </Button>
                   <Button
                     variant="icon"
-                    title="Edit feed"
+                    title="Edit feed settings"
                     onClick={() => navigate(`/feeds/${feed.id}/edit`)}
                   >
                     <PencilIcon />
                   </Button>
                   <Button
                     variant="icon"
-                    title="Copy feed URL"
+                    title="Copy RSS feed URL to clipboard"
                     onClick={() => handleCopy(feed)}
                   >
                     {copiedId === feed.id ? (
@@ -136,7 +153,7 @@ export default function FeedsPage({ onLogout }: { onLogout: () => void }) {
                   </Button>
                   <Button
                     variant="icon"
-                    title="Delete feed"
+                    title="Delete this feed"
                     onClick={() => handleDelete(feed)}
                   >
                     <TrashIcon style={{ color: "var(--danger)" }} />
