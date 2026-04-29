@@ -52,6 +52,7 @@ Docker Compose port bindings can be changed in `.env`:
 
 - `OTN_FRONTEND_PORT` controls the public Nginx/frontend port used for `/admin`, `/api`, and `/f/{random}.xml`; default `8080`.
 - `OTN_BACKEND_PORT` controls the optional direct host port for the FastAPI backend; default `8000`.
+- `OTN_LOG_LEVEL` controls backend application logs; default `INFO`. Preview and IMAP diagnostics redact passwords, message bodies, full email addresses, and random feed slugs.
 
 The durable backup set is:
 

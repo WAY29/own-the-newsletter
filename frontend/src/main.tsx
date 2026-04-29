@@ -327,7 +327,10 @@ function FeedEditor({
           <Field label="Feed title">
             <Input value={form.title} onChange={(event) => patch({ title: event.target.value })} required />
           </Field>
-          <Field label="Recipient filter" hint="Exact case-insensitive match against To, Cc, Delivered-To, X-Original-To.">
+          <Field
+            label="Recipient filter"
+            hint="Matches the address the newsletter was sent to in To, Cc, Delivered-To, or X-Original-To. It does not match the sender/From address."
+          >
             <Input value={form.recipient} onChange={(event) => patch({ recipient: event.target.value })} required />
           </Field>
           <Field label="IMAP host">
@@ -404,6 +407,12 @@ function Preview({ result }: { result: PreviewResult }) {
   return (
     <div className="preview">
       <strong>{result.match_count} matching message{result.match_count === 1 ? "" : "s"}</strong>
+      <p>
+        Scanned {result.scanned_count} recent message{result.scanned_count === 1 ? "" : "s"}.
+        {result.sender_only_count > 0
+          ? ` ${result.sender_only_count} had this address as the sender only, not as a recipient.`
+          : ""}
+      </p>
       {result.samples.length > 0 ? (
         <ul>
           {result.samples.map((sample) => (
@@ -430,4 +439,3 @@ createRoot(document.getElementById("root")!).render(
     <App />
   </React.StrictMode>
 );
-

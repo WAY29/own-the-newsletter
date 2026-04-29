@@ -2,17 +2,20 @@ from __future__ import annotations
 
 from contextlib import asynccontextmanager
 from datetime import timedelta
+import logging
 from pathlib import Path
 import secrets
+from time import perf_counter
 from typing import Annotated, Any
 
-from fastapi import Cookie, Depends, FastAPI, HTTPException, Response
+from fastapi import Cookie, Depends, FastAPI, HTTPException, Request, Response
 from fastapi.responses import FileResponse
 
 from .body_processor import BodyProcessor
 from .config import Settings, get_settings
 from .feed_publisher import FeedPublisher
 from .imap_source import ImapSource
+from .logging_config import configure_logging, safe_log_text
 from .schemas import FeedCreate, FeedUpdate, LoginRequest, PreviewRequest
 from .scheduler import BackendScheduler
 from .security import CredentialCipher, constant_time_equal, new_secret_token, token_hash
@@ -21,10 +24,12 @@ from .sync_engine import SyncEngine
 from .timeutil import iso_now, parse_iso, utc_now
 
 SESSION_COOKIE = "onn_session"
+logger = logging.getLogger(__name__)
 
 
 def create_app(settings: Settings | None = None, imap_source: ImapSource | None = None) -> FastAPI:
     settings = settings or get_settings()
+    configure_logging(settings.log_level)
     settings.ensure_paths()
     store = MessageStore(settings.database_path)
     store.init_db()
@@ -52,6 +57,31 @@ def create_app(settings: Settings | None = None, imap_source: ImapSource | None 
     app.state.store = store
     app.state.sync_engine = sync_engine
     app.state.publisher = publisher
+
+    @app.middleware("http")
+    async def log_requests(request: Request, call_next):
+        started = perf_counter()
+        path = safe_log_text(request.url.path)
+        try:
+            response = await call_next(request)
+        except Exception:
+            duration_ms = (perf_counter() - started) * 1000
+            logger.exception(
+                "HTTP request failed method=%s path=%s duration_ms=%.1f",
+                request.method,
+                path,
+                duration_ms,
+            )
+            raise
+        duration_ms = (perf_counter() - started) * 1000
+        logger.info(
+            "HTTP request method=%s path=%s status=%s duration_ms=%.1f",
+            request.method,
+            path,
+            response.status_code,
+            duration_ms,
+        )
+        return response
 
     def require_admin(session_token: Annotated[str | None, Cookie(alias=SESSION_COOKIE)] = None) -> bool:
         if not session_token:

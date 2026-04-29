@@ -11,6 +11,16 @@ def normalize_address(value: str) -> str:
     return value.strip().strip("<>").lower()
 
 
+def extract_addresses(values: Iterable[str]) -> set[str]:
+    addresses: set[str] = set()
+    for display_name, address in getaddresses(list(values)):
+        candidate = address or display_name
+        normalized = normalize_address(candidate)
+        if normalized:
+            addresses.add(normalized)
+    return addresses
+
+
 def extract_recipient_addresses(headers: Mapping[str, str | Iterable[str]]) -> set[str]:
     values: list[str] = []
     lowered = {key.lower(): value for key, value in headers.items()}
@@ -23,13 +33,7 @@ def extract_recipient_addresses(headers: Mapping[str, str | Iterable[str]]) -> s
         else:
             values.extend(raw_value)
 
-    addresses: set[str] = set()
-    for display_name, address in getaddresses(values):
-        candidate = address or display_name
-        normalized = normalize_address(candidate)
-        if normalized:
-            addresses.add(normalized)
-    return addresses
+    return extract_addresses(values)
 
 
 def message_recipient_headers(message: Message) -> dict[str, list[str]]:
@@ -38,4 +42,3 @@ def message_recipient_headers(message: Message) -> dict[str, list[str]]:
 
 def matches_recipient(headers: Mapping[str, str | Iterable[str]], target_address: str) -> bool:
     return normalize_address(target_address) in extract_recipient_addresses(headers)
-

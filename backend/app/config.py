@@ -32,6 +32,7 @@ class Settings:
     scheduler_enabled: bool
     scheduler_tick_seconds: int
     imap_timeout_seconds: int
+    log_level: str = "INFO"
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -46,6 +47,7 @@ class Settings:
             scheduler_enabled=_bool_env("OTN_SCHEDULER_ENABLED", True),
             scheduler_tick_seconds=_int_env("OTN_SCHEDULER_TICK_SECONDS", 60),
             imap_timeout_seconds=_int_env("OTN_IMAP_TIMEOUT_SECONDS", 30),
+            log_level=os.getenv("OTN_LOG_LEVEL", "INFO"),
         )
 
     def ensure_paths(self) -> None:
@@ -58,4 +60,3 @@ def get_settings() -> Settings:
     settings = Settings.from_env()
     settings.ensure_paths()
     return settings
-

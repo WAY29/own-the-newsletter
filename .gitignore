@@ -1,4 +1,5 @@
 .env
+.multica_attachments/
 .venv/
 __pycache__/
 .pytest_cache/
