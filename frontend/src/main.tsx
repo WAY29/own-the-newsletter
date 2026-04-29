@@ -135,6 +135,12 @@ function Dashboard({
   const [editing, setEditing] = useState<Feed | null>(null);
   const [busyFeedId, setBusyFeedId] = useState<number | null>(null);
 
+  useEffect(() => {
+    if (editing && !feeds.some((feed) => feed.id === editing.id)) {
+      setEditing(null);
+    }
+  }, [editing, feeds]);
+
   return (
     <div className="dashboard">
       <div className="toolbar">
@@ -220,6 +226,7 @@ function Dashboard({
                     onClick={async () => {
                       if (!confirm(`Delete ${feed.title}?`)) return;
                       await api.deleteFeed(feed.id);
+                      if (editing?.id === feed.id) setEditing(null);
                       onMessage(`Deleted ${feed.title}`);
                       await onRefresh();
                     }}
