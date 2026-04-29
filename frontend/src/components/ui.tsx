@@ -50,10 +50,10 @@ export function Field({
   );
 }
 
-export function StatusBadge({ status }: { status: string | null }) {
+export function StatusBadge({ status, tooltip }: { status: string | null; tooltip?: string }) {
   const label = status ?? "never";
   return (
-    <span className={`status-badge status-${label}`}>
+    <span className={`status-badge status-${label}`} title={tooltip}>
       <span className="status-badge-dot" />
       {label}
     </span>

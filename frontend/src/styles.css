@@ -322,6 +322,14 @@ button, input, select, textarea {
   flex-shrink: 0;
 }
 
+.feed-item-count {
+  font-size: 12px;
+  font-weight: 510;
+  color: var(--text-tertiary);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
 /* Status badge */
 .status-badge {
   display: inline-flex;

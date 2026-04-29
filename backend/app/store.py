@@ -326,6 +326,21 @@ class MessageStore:
                 visible_placeholders = ",".join("?" for _ in visible)
                 conn.execute(f"UPDATE feed_items SET archived = 0 WHERE id IN ({visible_placeholders})", list(visible))
 
+    def count_feed_items(self, feed_id: int) -> int:
+        with self.connect() as conn:
+            row = conn.execute(
+                "SELECT COUNT(*) FROM feed_items WHERE feed_id = ? AND archived = 0",
+                (feed_id,),
+            ).fetchone()
+            return row[0] if row else 0
+
+    def count_all_feed_items(self) -> dict[int, int]:
+        with self.connect() as conn:
+            rows = conn.execute(
+                "SELECT feed_id, COUNT(*) FROM feed_items WHERE archived = 0 GROUP BY feed_id"
+            ).fetchall()
+            return {row[0]: row[1] for row in rows}
+
     def list_feed_items(self, feed_id: int, *, include_archived: bool = False) -> list[sqlite3.Row]:
         archived_clause = "" if include_archived else "AND fi.archived = 0"
         with self.connect() as conn:

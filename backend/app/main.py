@@ -134,7 +134,9 @@ def create_app(settings: Settings | None = None, imap_source: ImapSource | None 
 
     @app.get("/api/feeds")
     def list_feeds(_admin: bool = Depends(require_admin)) -> dict[str, Any]:
-        return {"feeds": [_serialize_feed(feed, settings) for feed in store.list_feeds()]}
+        feeds = store.list_feeds()
+        counts = store.count_all_feed_items()
+        return {"feeds": [_serialize_feed(feed, settings, item_count=counts.get(feed["id"], 0)) for feed in feeds]}
 
     @app.post("/api/feeds/preview")
     def preview_feed(payload: PreviewRequest, _admin: bool = Depends(require_admin)) -> dict[str, Any]:
@@ -157,14 +159,14 @@ def create_app(settings: Settings | None = None, imap_source: ImapSource | None 
         publisher.publish(feed)
         sync_engine.sync_feed(int(feed["id"]), manual=False)
         feed = store.get_feed(int(feed["id"])) or feed
-        return {"feed": _serialize_feed(feed, settings)}
+        return {"feed": _serialize_feed(feed, settings, item_count=store.count_feed_items(int(feed["id"])))}
 
     @app.get("/api/feeds/{feed_id}")
     def get_feed(feed_id: int, _admin: bool = Depends(require_admin)) -> dict[str, Any]:
         feed = store.get_feed(feed_id)
         if feed is None:
             raise HTTPException(status_code=404, detail="Feed not found")
-        return {"feed": _serialize_feed(feed, settings)}
+        return {"feed": _serialize_feed(feed, settings, item_count=store.count_feed_items(feed_id))}
 
     @app.put("/api/feeds/{feed_id}")
     def update_feed(feed_id: int, payload: FeedUpdate, _admin: bool = Depends(require_admin)) -> dict[str, Any]:
@@ -186,7 +188,7 @@ def create_app(settings: Settings | None = None, imap_source: ImapSource | None 
         if feed is None:
             raise HTTPException(status_code=404, detail="Feed not found")
         publisher.publish(feed)
-        return {"feed": _serialize_feed(feed, settings)}
+        return {"feed": _serialize_feed(feed, settings, item_count=store.count_feed_items(feed_id))}
 
     @app.delete("/api/feeds/{feed_id}")
     def delete_feed(feed_id: int, _admin: bool = Depends(require_admin)) -> dict[str, bool]:
@@ -227,7 +229,7 @@ def create_app(settings: Settings | None = None, imap_source: ImapSource | None 
     return app
 
 
-def _serialize_feed(feed, settings: Settings) -> dict[str, Any]:
+def _serialize_feed(feed, settings: Settings, *, item_count: int = 0) -> dict[str, Any]:
     return {
         "id": feed["id"],
         "title": feed["title"],
@@ -246,6 +248,7 @@ def _serialize_feed(feed, settings: Settings) -> dict[str, Any]:
         "created_at": feed["created_at"],
         "updated_at": feed["updated_at"],
         "sync_status": _serialize_status(feed),
+        "item_count": item_count,
     }
 
 
