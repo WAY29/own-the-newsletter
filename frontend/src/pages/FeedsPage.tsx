@@ -1,37 +1,64 @@
 import { useEffect, useState, useCallback } from "react";
 import { api, type Feed, type FeedListPagination, type FeedSortBy, type FeedSortDir } from "../api";
-import { Button, Select, StatusBadge } from "../components/ui";
-import { PlusIcon, PencilIcon, CopyIcon, TrashIcon, CheckIcon, RefreshIcon } from "../components/icons";
+import { Button, StatusBadge } from "../components/ui";
+import {
+  PlusIcon, PencilIcon, CopyIcon, TrashIcon, CheckIcon, RefreshIcon,
+  SortAscIcon, SortDescIcon,
+  ChevronLeftIcon, ChevronRightIcon, ChevronsLeftIcon, ChevronsRightIcon
+} from "../components/icons";
 import FeedEditorModal from "./FeedEditorPage";
 
 function feedUrlForCurrentOrigin(feed: Feed): string {
   return new URL(`/f/${encodeURIComponent(feed.random_slug)}.xml`, window.location.origin).toString();
 }
 
-const PAGE_SIZE_OPTIONS = [10, 25, 50];
+const PAGE_SIZE = 25;
 
-const SORT_OPTIONS: Array<{ value: FeedSortBy; label: string }> = [
-  { value: "created_at", label: "Created" },
-  { value: "updated_at", label: "Updated" },
-  { value: "title", label: "Title" },
-  { value: "item_count", label: "Items" },
-  { value: "last_sync", label: "Last sync" }
+const SORT_COLUMNS: Array<{ key: FeedSortBy; label: string }> = [
+  { key: "title", label: "Title" },
+  { key: "item_count", label: "Items" },
+  { key: "last_sync", label: "Last Sync" },
+  { key: "created_at", label: "Created" },
+  { key: "updated_at", label: "Updated" },
 ];
 
 const DEFAULT_PAGINATION: FeedListPagination = {
   page: 1,
-  page_size: PAGE_SIZE_OPTIONS[0],
+  page_size: PAGE_SIZE,
   total: 0,
   total_pages: 1,
   has_next: false,
   has_previous: false
 };
 
+function buildPageNumbers(current: number, total: number): (number | "ellipsis")[] {
+  if (total <= 1) return [];
+  const pages: (number | "ellipsis")[] = [];
+  const delta = 3;
+  let left = Math.max(2, current - delta);
+  let right = Math.min(total - 1, current + delta);
+
+  // Always show page 1
+  pages.push(1);
+
+  if (left > 2) pages.push("ellipsis");
+
+  for (let i = left; i <= right; i++) {
+    pages.push(i);
+  }
+
+  if (right < total - 1) pages.push("ellipsis");
+
+  // Always show last page
+  if (total > 1) pages.push(total);
+
+  return pages;
+}
+
 export default function FeedsPage({ onLogout }: { onLogout: () => void }) {
   const [feeds, setFeeds] = useState<Feed[]>([]);
   const [pagination, setPagination] = useState<FeedListPagination>(DEFAULT_PAGINATION);
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(PAGE_SIZE_OPTIONS[0]);
   const [sortBy, setSortBy] = useState<FeedSortBy>("created_at");
   const [sortDir, setSortDir] = useState<FeedSortDir>("desc");
   const [loading, setLoading] = useState(true);
@@ -44,7 +71,7 @@ export default function FeedsPage({ onLogout }: { onLogout: () => void }) {
 
   const refresh = useCallback(async () => {
     try {
-      const result = await api.listFeeds({ page, page_size: pageSize, sort_by: sortBy, sort_dir: sortDir });
+      const result = await api.listFeeds({ page, page_size: PAGE_SIZE, sort_by: sortBy, sort_dir: sortDir });
       if (result.pagination.total > 0 && result.pagination.page > result.pagination.total_pages) {
         setPage(result.pagination.total_pages);
         return;
@@ -57,7 +84,7 @@ export default function FeedsPage({ onLogout }: { onLogout: () => void }) {
     } finally {
       setLoading(false);
     }
-  }, [page, pageSize, sortBy, sortDir]);
+  }, [page, sortBy, sortDir]);
 
   useEffect(() => {
     refresh();
@@ -126,6 +153,16 @@ export default function FeedsPage({ onLogout }: { onLogout: () => void }) {
     showToast(editingFeedId ? "Feed updated" : "Feed created");
   }
 
+  function handleSort(column: FeedSortBy) {
+    if (sortBy === column) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortBy(column);
+      setSortDir("desc");
+    }
+    setPage(1);
+  }
+
   function formatSyncTooltip(feed: Feed): string {
     const parts: string[] = [];
     if (feed.sync_status.last_sync_finished_at) {
@@ -143,6 +180,17 @@ export default function FeedsPage({ onLogout }: { onLogout: () => void }) {
     return parts.length > 0 ? parts.join("\n") : "Never synced";
   }
 
+  function renderSortIcon(column: FeedSortBy) {
+    if (sortBy !== column) {
+      return <span className="sort-icon sort-icon-inactive"><SortDescIcon /></span>;
+    }
+    return (
+      <span className="sort-icon sort-icon-active">
+        {sortDir === "asc" ? <SortAscIcon /> : <SortDescIcon />}
+      </span>
+    );
+  }
+
   if (loading) {
     return (
       <div className="app-content">
@@ -153,6 +201,7 @@ export default function FeedsPage({ onLogout }: { onLogout: () => void }) {
 
   const rangeStart = pagination.total === 0 || feeds.length === 0 ? 0 : (pagination.page - 1) * pagination.page_size + 1;
   const rangeEnd = feeds.length === 0 ? 0 : Math.min(pagination.total, rangeStart + feeds.length - 1);
+  const pageNumbers = buildPageNumbers(pagination.page, pagination.total_pages);
 
   return (
     <div className="app-content">
@@ -170,56 +219,6 @@ export default function FeedsPage({ onLogout }: { onLogout: () => void }) {
 
       <div className="card" style={{ padding: 0, overflow: "hidden" }}>
         {listError ? <div className="feed-list-error error-msg">{listError}</div> : null}
-        {pagination.total > 0 ? (
-          <div className="feed-toolbar">
-            <div className="feed-toolbar-summary">
-              Showing {rangeStart}-{rangeEnd} of {pagination.total}
-            </div>
-            <div className="feed-toolbar-controls">
-              <label className="feed-control">
-                <span>Sort</span>
-                <Select
-                  value={sortBy}
-                  aria-label="Sort feeds"
-                  onChange={(event) => {
-                    setPage(1);
-                    setSortBy(event.target.value as FeedSortBy);
-                  }}
-                >
-                  {SORT_OPTIONS.map((option) => (
-                    <option key={option.value} value={option.value}>{option.label}</option>
-                  ))}
-                </Select>
-              </label>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => {
-                  setPage(1);
-                  setSortDir((current) => current === "asc" ? "desc" : "asc");
-                }}
-                title="Toggle sort direction"
-              >
-                {sortDir === "asc" ? "Ascending" : "Descending"}
-              </Button>
-              <label className="feed-control">
-                <span>Rows</span>
-                <Select
-                  value={pageSize}
-                  aria-label="Feeds per page"
-                  onChange={(event) => {
-                    setPage(1);
-                    setPageSize(Number(event.target.value));
-                  }}
-                >
-                  {PAGE_SIZE_OPTIONS.map((option) => (
-                    <option key={option} value={option}>{option}</option>
-                  ))}
-                </Select>
-              </label>
-            </div>
-          </div>
-        ) : null}
         {feeds.length === 0 ? (
           <div className="empty-state">
             <h3>{pagination.total === 0 ? "No feeds yet" : "No feeds on this page"}</h3>
@@ -230,77 +229,134 @@ export default function FeedsPage({ onLogout }: { onLogout: () => void }) {
             </p>
           </div>
         ) : (
-          <div className="feed-list">
-            {feeds.map((feed) => (
-              <div key={feed.id} className="feed-row">
-                <div className="feed-row-info">
-                  <div className="feed-row-title">{feed.title}</div>
-                  <div className="feed-row-meta">
-                    <span>{feed.recipient}</span>
-                    <span>{feed.folders.join(", ")}</span>
-                  </div>
-                </div>
-                <span className="feed-item-count" title="Feed items count">{feed.item_count} items</span>
-                <StatusBadge status={feed.sync_status.last_sync_status} tooltip={formatSyncTooltip(feed)} />
-                <div className="feed-row-actions">
-                  <Button
-                    variant="icon"
-                    title="Manually trigger a sync for this feed"
-                    disabled={syncingId === feed.id}
-                    onClick={() => handleSync(feed)}
-                  >
-                    <RefreshIcon style={syncingId === feed.id ? { animation: "spin 1s linear infinite" } : undefined} />
-                  </Button>
-                  <Button
-                    variant="icon"
-                    title="Edit feed settings"
-                    onClick={() => openEditor(feed.id)}
-                  >
-                    <PencilIcon />
-                  </Button>
-                  <Button
-                    variant="icon"
-                    title="Copy RSS feed URL to clipboard"
-                    onClick={() => handleCopy(feed)}
-                  >
-                    {copiedId === feed.id ? (
-                      <CheckIcon style={{ color: "var(--emerald)" }} />
-                    ) : (
-                      <CopyIcon />
-                    )}
-                  </Button>
-                  <Button
-                    variant="icon"
-                    title="Delete this feed"
-                    onClick={() => handleDelete(feed)}
-                  >
-                    <TrashIcon style={{ color: "var(--danger)" }} />
-                  </Button>
-                </div>
-              </div>
-            ))}
+          <div className="feed-table-wrap">
+            <table className="feed-table">
+              <thead>
+                <tr>
+                  {SORT_COLUMNS.map((col) => (
+                    <th
+                      key={col.key}
+                      className={`feed-th ${sortBy === col.key ? "feed-th-active" : ""}`}
+                      onClick={() => handleSort(col.key)}
+                    >
+                      <span className="feed-th-inner">
+                        {col.label}
+                        {renderSortIcon(col.key)}
+                      </span>
+                    </th>
+                  ))}
+                  <th className="feed-th feed-th-status">Status</th>
+                  <th className="feed-th feed-th-actions">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {feeds.map((feed) => (
+                  <tr key={feed.id} className="feed-tr">
+                    <td className="feed-td feed-td-title">
+                      <div className="feed-cell-title">{feed.title}</div>
+                      <div className="feed-cell-meta">
+                        <span>{feed.recipient}</span>
+                        {feed.folders.length > 0 && <span>{feed.folders.join(", ")}</span>}
+                      </div>
+                    </td>
+                    <td className="feed-td feed-td-items">{feed.item_count}</td>
+                    <td className="feed-td feed-td-sync">
+                      {feed.sync_status.last_sync_finished_at
+                        ? new Date(feed.sync_status.last_sync_finished_at).toLocaleString()
+                        : "—"}
+                    </td>
+                    <td className="feed-td feed-td-date">
+                      {new Date(feed.created_at).toLocaleDateString()}
+                    </td>
+                    <td className="feed-td feed-td-date">
+                      {new Date(feed.updated_at).toLocaleDateString()}
+                    </td>
+                    <td className="feed-td feed-td-status">
+                      <StatusBadge status={feed.sync_status.last_sync_status} tooltip={formatSyncTooltip(feed)} />
+                    </td>
+                    <td className="feed-td feed-td-actions">
+                      <div className="feed-row-actions">
+                        <Button
+                          variant="icon"
+                          title="Manually trigger a sync for this feed"
+                          disabled={syncingId === feed.id}
+                          onClick={() => handleSync(feed)}
+                        >
+                          <RefreshIcon style={syncingId === feed.id ? { animation: "spin 1s linear infinite" } : undefined} />
+                        </Button>
+                        <Button variant="icon" title="Edit feed settings" onClick={() => openEditor(feed.id)}>
+                          <PencilIcon />
+                        </Button>
+                        <Button variant="icon" title="Copy RSS feed URL to clipboard" onClick={() => handleCopy(feed)}>
+                          {copiedId === feed.id ? <CheckIcon style={{ color: "var(--emerald)" }} /> : <CopyIcon />}
+                        </Button>
+                        <Button variant="icon" title="Delete this feed" onClick={() => handleDelete(feed)}>
+                          <TrashIcon style={{ color: "var(--danger)" }} />
+                        </Button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         )}
         {pagination.total > 0 ? (
           <div className="pagination-bar">
-            <span>Page {pagination.page} of {pagination.total_pages}</span>
-            <div className="pagination-actions">
-              <Button
-                variant="ghost"
-                size="sm"
+            <span className="pagination-summary">
+              Showing {rangeStart}-{rangeEnd} of {pagination.total}
+            </span>
+            <div className="pagination-pages">
+              <button
+                className="page-btn page-btn-nav"
                 disabled={!pagination.has_previous}
-                onClick={() => setPage((current) => Math.max(1, current - 1))}
+                onClick={() => setPage(1)}
+                title="First page"
+                aria-label="First page"
               >
-                Previous
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
+                <ChevronsLeftIcon />
+              </button>
+              <button
+                className="page-btn page-btn-nav"
+                disabled={!pagination.has_previous}
+                onClick={() => setPage((c) => Math.max(1, c - 1))}
+                title="Previous page"
+                aria-label="Previous page"
+              >
+                <ChevronLeftIcon />
+              </button>
+              {pageNumbers.map((p, i) =>
+                p === "ellipsis" ? (
+                  <span key={`e${i}`} className="page-ellipsis">...</span>
+                ) : (
+                  <button
+                    key={p}
+                    className={`page-btn page-btn-num ${p === pagination.page ? "page-btn-current" : ""}`}
+                    onClick={() => setPage(p)}
+                    aria-current={p === pagination.page ? "page" : undefined}
+                  >
+                    {p}
+                  </button>
+                )
+              )}
+              <button
+                className="page-btn page-btn-nav"
                 disabled={!pagination.has_next}
-                onClick={() => setPage((current) => current + 1)}
+                onClick={() => setPage((c) => c + 1)}
+                title="Next page"
+                aria-label="Next page"
               >
-                Next
-              </Button>
+                <ChevronRightIcon />
+              </button>
+              <button
+                className="page-btn page-btn-nav"
+                disabled={!pagination.has_next}
+                onClick={() => setPage(pagination.total_pages)}
+                title="Last page"
+                aria-label="Last page"
+              >
+                <ChevronsRightIcon />
+              </button>
             </div>
           </div>
         ) : null}
