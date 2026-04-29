@@ -1,16 +1,17 @@
 import { useEffect, useState, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
 import { api, Feed } from "../api";
 import { Button, StatusBadge } from "../components/ui";
 import { PlusIcon, PencilIcon, CopyIcon, TrashIcon, CheckIcon, RefreshIcon } from "../components/icons";
+import FeedEditorModal from "./FeedEditorPage";
 
 export default function FeedsPage({ onLogout }: { onLogout: () => void }) {
-  const navigate = useNavigate();
   const [feeds, setFeeds] = useState<Feed[]>([]);
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState("");
   const [syncingId, setSyncingId] = useState<number | null>(null);
   const [copiedId, setCopiedId] = useState<number | null>(null);
+  const [editorOpen, setEditorOpen] = useState(false);
+  const [editingFeedId, setEditingFeedId] = useState<number | null>(null);
 
   const refresh = useCallback(async () => {
     try {
@@ -66,6 +67,22 @@ export default function FeedsPage({ onLogout }: { onLogout: () => void }) {
     }
   }
 
+  function openEditor(feedId: number | null = null) {
+    setEditingFeedId(feedId);
+    setEditorOpen(true);
+  }
+
+  function closeEditor() {
+    setEditorOpen(false);
+    setEditingFeedId(null);
+  }
+
+  function handleEditorSaved() {
+    closeEditor();
+    refresh();
+    showToast(editingFeedId ? "Feed updated" : "Feed created");
+  }
+
   function formatSyncTooltip(feed: Feed): string {
     const parts: string[] = [];
     if (feed.sync_status.last_sync_finished_at) {
@@ -100,7 +117,7 @@ export default function FeedsPage({ onLogout }: { onLogout: () => void }) {
             {feeds.length} configured feed rule{feeds.length === 1 ? "" : "s"}
           </div>
         </div>
-        <Button onClick={() => navigate("/feeds/new")}>
+        <Button onClick={() => openEditor()}>
           <PlusIcon /> Add feed
         </Button>
       </div>
@@ -136,7 +153,7 @@ export default function FeedsPage({ onLogout }: { onLogout: () => void }) {
                   <Button
                     variant="icon"
                     title="Edit feed settings"
-                    onClick={() => navigate(`/feeds/${feed.id}/edit`)}
+                    onClick={() => openEditor(feed.id)}
                   >
                     <PencilIcon />
                   </Button>
@@ -166,6 +183,13 @@ export default function FeedsPage({ onLogout }: { onLogout: () => void }) {
       </div>
 
       {toast ? <div className="toast">{toast}</div> : null}
+
+      <FeedEditorModal
+        open={editorOpen}
+        feedId={editingFeedId}
+        onClose={closeEditor}
+        onSaved={handleEditorSaved}
+      />
     </div>
   );
 }
