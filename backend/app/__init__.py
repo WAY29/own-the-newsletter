@@ -1,0 +1,2 @@
+"""Own New Newsletter backend."""
+
