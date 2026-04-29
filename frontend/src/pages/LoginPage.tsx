@@ -4,7 +4,11 @@ import { api } from "../api";
 import { Button, Input } from "../components/ui";
 import { RssIcon } from "../components/icons";
 
-export default function LoginPage() {
+type LoginPageProps = {
+  onLogin: () => void;
+};
+
+export default function LoginPage({ onLogin }: LoginPageProps) {
   const navigate = useNavigate();
   const [token, setToken] = useState("");
   const [error, setError] = useState("");
@@ -16,6 +20,7 @@ export default function LoginPage() {
     setError("");
     try {
       await api.login(token);
+      onLogin();
       navigate("/", { replace: true });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Login failed");

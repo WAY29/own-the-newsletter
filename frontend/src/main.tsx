@@ -32,7 +32,7 @@ function AppShell() {
   if (!auth) {
     return (
       <Routes>
-        <Route path="/login" element={<LoginPage />} />
+        <Route path="/login" element={<LoginPage onLogin={() => setAuth(true)} />} />
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
     );
