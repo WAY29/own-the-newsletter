@@ -164,3 +164,32 @@ def test_create_feed_runs_initial_sync(tmp_path: Path) -> None:
     assert imap_source.fetch_calls[0]["uid_start"] is None
     assert imap_source.fetch_calls[0]["since"] is not None
     assert imap_source.fetch_calls[0]["limit"] is None
+
+
+def test_preview_does_not_require_title(tmp_path: Path) -> None:
+    settings = build_settings(tmp_path)
+    imap_source = FakeImapSource()
+    app = create_app(settings=settings, imap_source=imap_source)
+
+    payload = {
+        "title": "",
+        "recipient": "target@example.test",
+        "imap_host": "imap.example.test",
+        "imap_port": 993,
+        "imap_tls": "ssl",
+        "imap_username": "user@example.test",
+        "imap_password": "password",
+        "folders": ["INBOX"],
+        "backfill_days": 30,
+        "retention_count": 50,
+        "sync_interval_minutes": 60,
+        "limit_per_folder": 50,
+    }
+
+    with TestClient(app) as client:
+        client.post("/api/auth/login", json={"token": "admin-token"})
+        response = client.post("/api/feeds/preview", json=payload)
+
+    assert response.status_code == 200
+    assert response.json()["match_count"] == 1
+    assert response.json()["scanned_count"] == 2

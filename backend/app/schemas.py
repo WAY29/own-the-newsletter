@@ -12,17 +12,13 @@ class LoginRequest(BaseModel):
     token: str = Field(min_length=1)
 
 
-class FeedBase(BaseModel):
-    title: str = Field(min_length=1, max_length=200)
+class ImapPreviewBase(BaseModel):
     recipient: str = Field(min_length=3, max_length=320)
     imap_host: str = Field(min_length=1, max_length=255)
     imap_port: int = Field(default=993, ge=1, le=65535)
     imap_tls: ImapTls = "ssl"
     imap_username: str = Field(min_length=1, max_length=320)
     folders: list[str] = Field(default_factory=lambda: ["INBOX"])
-    backfill_days: int = Field(default=30, ge=0, le=3650)
-    retention_count: int = Field(default=50, ge=1, le=1000)
-    sync_interval_minutes: int = Field(default=60, ge=0, le=10080)
 
     @field_validator("folders")
     @classmethod
@@ -34,6 +30,13 @@ class FeedBase(BaseModel):
     @classmethod
     def normalize_recipient(cls, recipient: str) -> str:
         return recipient.strip()
+
+
+class FeedBase(ImapPreviewBase):
+    title: str = Field(min_length=1, max_length=200)
+    backfill_days: int = Field(default=30, ge=0, le=3650)
+    retention_count: int = Field(default=50, ge=1, le=1000)
+    sync_interval_minutes: int = Field(default=60, ge=0, le=10080)
 
 
 class FeedCreate(FeedBase):
@@ -67,6 +70,6 @@ class FeedUpdate(BaseModel):
         return recipient.strip() if recipient is not None else None
 
 
-class PreviewRequest(FeedCreate):
+class PreviewRequest(ImapPreviewBase):
+    imap_password: str = Field(min_length=1, max_length=4096)
     limit_per_folder: int = Field(default=50, ge=1, le=200)
-
