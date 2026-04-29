@@ -134,6 +134,8 @@ def test_sync_imports_matching_messages_and_uses_cursor_incrementally(tmp_path: 
     second = engine.sync_feed(feed["id"], manual=True)
 
     assert first.status == "success"
+    assert first.feed_id == feed["id"]
+    assert first.feed_title == "Feed"
     assert first.imported_count == 1
     assert first.skipped_count == 1
     assert second.status == "success"
@@ -141,3 +143,15 @@ def test_sync_imports_matching_messages_and_uses_cursor_incrementally(tmp_path: 
     assert source.fetch_calls[-1]["uid_start"] == 3
     items = store.list_feed_items(feed["id"])
     assert [item["subject"] for item in items] == ["One"]
+
+
+def test_sync_due_feeds_returns_feed_metadata(tmp_path: Path) -> None:
+    engine, _store, _source, feed = build_engine(tmp_path)
+
+    results = engine.sync_due_feeds()
+
+    assert len(results) == 1
+    assert results[0].feed_id == feed["id"]
+    assert results[0].feed_title == "Feed"
+    assert results[0].imported_count == 1
+    assert results[0].skipped_count == 1

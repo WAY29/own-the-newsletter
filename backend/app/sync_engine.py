@@ -29,6 +29,8 @@ class SyncResult:
     imported_count: int = 0
     skipped_count: int = 0
     error: str | None = None
+    feed_id: int | None = None
+    feed_title: str | None = None
 
 
 class SyncEngine:
@@ -114,6 +116,7 @@ class SyncEngine:
     def sync_feed(self, feed_id: int, *, manual: bool) -> SyncResult:
         lock = self._lock_for(feed_id)
         if not lock.acquire(blocking=False):
+            feed = self.store.get_feed(feed_id)
             self.store.mark_sync_finished(
                 feed_id,
                 status="skipped",
@@ -121,13 +124,15 @@ class SyncEngine:
                 skipped_count=0,
                 error="Sync skipped because another sync is already running.",
             )
-            return SyncResult(status="skipped")
+            return self._result_for_feed(feed, SyncResult(status="skipped"), feed_id=feed_id)
+        feed = None
         try:
             feed = self.store.get_feed(feed_id)
             if feed is None:
-                return SyncResult(status="missing", error="Feed not found")
+                return SyncResult(status="missing", error="Feed not found", feed_id=feed_id)
             self.store.mark_sync_started(feed_id)
             result = self._sync_single_feed(feed)
+            result = self._result_for_feed(feed, result)
             self.store.mark_sync_finished(
                 feed_id,
                 status=result.status,
@@ -148,7 +153,7 @@ class SyncEngine:
                 skipped_count=0,
                 error=error,
             )
-            return SyncResult(status="failed", error=error)
+            return self._result_for_feed(feed, SyncResult(status="failed", error=error), feed_id=feed_id)
         finally:
             lock.release()
 
@@ -166,7 +171,7 @@ class SyncEngine:
             feed_id = int(feed["id"])
             lock = self._lock_for(feed_id)
             if not lock.acquire(blocking=False):
-                results.append(SyncResult(status="skipped"))
+                results.append(self._result_for_feed(feed, SyncResult(status="skipped")))
                 continue
             acquired.append((feed_id, lock))
             runnable.append(feed)
@@ -181,6 +186,7 @@ class SyncEngine:
             for feed in runnable:
                 feed_id = int(feed["id"])
                 result = per_feed.get(feed_id, SyncResult(status="success"))
+                result = self._result_for_feed(feed, result)
                 self.store.mark_sync_finished(
                     feed_id,
                     status=result.status,
@@ -203,7 +209,7 @@ class SyncEngine:
                     skipped_count=0,
                     error=error,
                 )
-                results.append(SyncResult(status="failed", error=error))
+                results.append(self._result_for_feed(feed, SyncResult(status="failed", error=error)))
             return results
         finally:
             for _feed_id, lock in acquired:
@@ -302,6 +308,8 @@ class SyncEngine:
                 status="success",
                 imported_count=totals[feed_id]["imported"],
                 skipped_count=totals[feed_id]["skipped"],
+                feed_id=feed_id,
+                feed_title=str(feed["title"]),
             )
         return results
 
@@ -427,6 +435,27 @@ class SyncEngine:
                 lock = threading.Lock()
                 self._locks[feed_id] = lock
             return lock
+
+    def _result_for_feed(
+        self,
+        feed: sqlite3.Row | None,
+        result: SyncResult,
+        *,
+        feed_id: int | None = None,
+    ) -> SyncResult:
+        if feed is not None:
+            feed_id = int(feed["id"])
+            feed_title = str(feed["title"])
+        else:
+            feed_title = result.feed_title
+        return SyncResult(
+            status=result.status,
+            imported_count=result.imported_count,
+            skipped_count=result.skipped_count,
+            error=result.error,
+            feed_id=feed_id if feed_id is not None else result.feed_id,
+            feed_title=feed_title,
+        )
 
 
 def _safe_values(values: list[str]) -> list[str]:
