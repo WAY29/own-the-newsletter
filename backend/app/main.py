@@ -155,6 +155,8 @@ def create_app(settings: Settings | None = None, imap_source: ImapSource | None 
         data["random_slug"] = secrets.token_urlsafe(24)
         feed = store.create_feed(data)
         publisher.publish(feed)
+        sync_engine.sync_feed(int(feed["id"]), manual=False)
+        feed = store.get_feed(int(feed["id"])) or feed
         return {"feed": _serialize_feed(feed, settings)}
 
     @app.get("/api/feeds/{feed_id}")
