@@ -590,6 +590,7 @@ button, input, select, textarea {
   color: var(--danger);
   font-size: 13px;
   padding: 8px 12px;
+  white-space: pre-line;
 }
 
 /* Toast */

@@ -83,6 +83,76 @@ export type PreviewResult = {
   }>;
 };
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function formatErrorLocation(loc: unknown): string {
+  if (!Array.isArray(loc)) return "";
+
+  return loc
+    .filter((part): part is string | number => typeof part === "string" || typeof part === "number")
+    .map((part) => String(part))
+    .filter((part) => !["body", "query", "path"].includes(part))
+    .join(".");
+}
+
+function stringFromErrorRecord(record: Record<string, unknown>): string | null {
+  for (const key of ["msg", "message", "error"]) {
+    const value = record[key];
+    if (typeof value === "string" && value.trim()) return value;
+  }
+  return null;
+}
+
+function jsonFallback(value: unknown): string | null {
+  try {
+    return JSON.stringify(value) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function formatErrorDetail(detail: unknown): string | null {
+  if (typeof detail === "string") return detail;
+  if (typeof detail === "number" || typeof detail === "boolean") return String(detail);
+
+  if (Array.isArray(detail)) {
+    const messages = detail
+      .map(formatErrorDetail)
+      .filter((message): message is string => Boolean(message?.trim()));
+    return messages.length > 0 ? messages.join("\n") : null;
+  }
+
+  if (isRecord(detail)) {
+    const message = stringFromErrorRecord(detail);
+    if (message) {
+      const location = formatErrorLocation(detail.loc);
+      return location ? `${location}: ${message}` : message;
+    }
+
+    const nestedDetail = formatErrorDetail(detail.detail);
+    if (nestedDetail) return nestedDetail;
+
+    return jsonFallback(detail);
+  }
+
+  return null;
+}
+
+function formatResponseError(body: unknown, fallback: string): string {
+  if (isRecord(body)) {
+    return (
+      formatErrorDetail(body.detail) ??
+      stringFromErrorRecord(body) ??
+      formatErrorDetail(body.errors) ??
+      fallback
+    );
+  }
+
+  return formatErrorDetail(body) ?? fallback;
+}
+
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const response = await fetch(path, {
     credentials: "include",
@@ -96,7 +166,7 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     let message = `${response.status} ${response.statusText}`;
     try {
       const body = await response.json();
-      message = body.detail ?? message;
+      message = formatResponseError(body, message);
     } catch {
       // Keep the status message when the response is not JSON.
     }
