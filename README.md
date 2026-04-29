@@ -23,10 +23,15 @@ Backend:
 
 ```bash
 cd backend
-python -m venv .venv
-. .venv/bin/activate
-pip install -r requirements.txt
-uvicorn app.main:app --reload
+uv sync
+uv run uvicorn app.main:app --reload
+```
+
+Backend tests:
+
+```bash
+cd backend
+uv run pytest
 ```
 
 Frontend:
@@ -46,4 +51,3 @@ The durable backup set is:
 - SQLite database at `OTN_DATABASE_PATH`
 - Feed files at `OTN_FEEDS_DIR`
 - `.env` or equivalent runtime secrets
-
