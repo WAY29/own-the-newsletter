@@ -16,6 +16,8 @@ docker compose up --build
 ```
 
 Open `http://localhost:8080/admin/` and log in with `OTN_ADMIN_TOKEN`.
+If you change `OTN_FRONTEND_PORT` in `.env`, open that port instead and update
+`OTN_PUBLIC_ORIGIN` to match it.
 
 ## Local Development
 
@@ -45,6 +47,11 @@ npm run dev
 ## Runtime Configuration
 
 See `.env.example` for required and optional environment variables. `OTN_SECRET_KEY` must remain stable because it is used to decrypt stored IMAP passwords.
+
+Docker Compose port bindings can be changed in `.env`:
+
+- `OTN_FRONTEND_PORT` controls the public Nginx/frontend port used for `/admin`, `/api`, and `/f/{random}.xml`; default `8080`.
+- `OTN_BACKEND_PORT` controls the optional direct host port for the FastAPI backend; default `8000`.
 
 The durable backup set is:
 

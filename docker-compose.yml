@@ -18,6 +18,8 @@ services:
       OTN_IMAP_TIMEOUT_SECONDS: ${OTN_IMAP_TIMEOUT_SECONDS:-30}
     volumes:
       - ./data:/data
+    ports:
+      - "${OTN_BACKEND_PORT:-8000}:8000"
     expose:
       - "8000"
     healthcheck:
@@ -38,6 +40,6 @@ services:
       - backend
       - frontend
     ports:
-      - "8080:80"
+      - "${OTN_FRONTEND_PORT:-8080}:80"
     volumes:
       - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
