@@ -88,9 +88,10 @@ button, input, select, textarea {
   border-bottom: 1px solid var(--border-subtle);
   padding: 0 24px;
   height: 52px;
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: center;
-  justify-content: space-between;
+  column-gap: 16px;
 }
 
 .app-header-left {
@@ -120,6 +121,7 @@ button, input, select, textarea {
   display: flex;
   align-items: center;
   gap: 4px;
+  justify-self: center;
 }
 
 .app-nav-link {
@@ -146,6 +148,7 @@ button, input, select, textarea {
   display: flex;
   align-items: center;
   gap: 8px;
+  justify-self: end;
 }
 
 .app-content {
@@ -876,17 +879,30 @@ button, input, select, textarea {
 /* Responsive */
 @media (max-width: 640px) {
   .app-header {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      "brand actions"
+      "nav nav";
     padding: 0 16px;
     height: auto;
     min-height: 52px;
-    gap: 10px;
+    column-gap: 10px;
+    row-gap: 8px;
   }
 
   .app-header-left {
+    grid-area: brand;
     align-items: flex-start;
-    flex-direction: column;
-    gap: 6px;
     padding: 10px 0;
+  }
+
+  .app-nav {
+    grid-area: nav;
+    padding-bottom: 10px;
+  }
+
+  .app-header-actions {
+    grid-area: actions;
   }
 
   .app-nav-link {

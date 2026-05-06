@@ -48,15 +48,15 @@ function AppShell() {
             <RssIcon width={18} height={18} />
             <span>Own New Newsletter</span>
           </div>
-          <nav className="app-nav" aria-label="Admin sections">
-            <NavLink to="/" end className={({ isActive }) => `app-nav-link ${isActive ? "app-nav-link-active" : ""}`}>
-              Feeds
-            </NavLink>
-            <NavLink to="/logs" className={({ isActive }) => `app-nav-link ${isActive ? "app-nav-link-active" : ""}`}>
-              Logs
-            </NavLink>
-          </nav>
         </div>
+        <nav className="app-nav" aria-label="Admin sections">
+          <NavLink to="/" end className={({ isActive }) => `app-nav-link ${isActive ? "app-nav-link-active" : ""}`}>
+            Feeds
+          </NavLink>
+          <NavLink to="/logs" className={({ isActive }) => `app-nav-link ${isActive ? "app-nav-link-active" : ""}`}>
+            Logs
+          </NavLink>
+        </nav>
         <div className="app-header-actions">
           <Button variant="ghost" size="sm" onClick={() => setSettingsOpen(true)}>
             <SettingsIcon /> Settings
