@@ -127,6 +127,31 @@ class MessageStore:
                     setting_value TEXT NOT NULL,
                     updated_at TEXT NOT NULL
                 );
+
+                CREATE TABLE IF NOT EXISTS activity_log_entries (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    operation_type TEXT NOT NULL,
+                    status TEXT NOT NULL,
+                    trigger TEXT NOT NULL,
+                    feed_id INTEGER,
+                    feed_title_snapshot TEXT,
+                    publication_target TEXT,
+                    imported_count INTEGER,
+                    skipped_count INTEGER,
+                    feed_count INTEGER,
+                    file_count INTEGER,
+                    started_at TEXT,
+                    completed_at TEXT NOT NULL,
+                    duration_ms INTEGER NOT NULL DEFAULT 0,
+                    error_summary TEXT,
+                    error_detail TEXT,
+                    metadata_json TEXT NOT NULL DEFAULT '{}'
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_activity_log_completed
+                    ON activity_log_entries(completed_at DESC, id DESC);
+                CREATE INDEX IF NOT EXISTS idx_activity_log_filters
+                    ON activity_log_entries(operation_type, status, trigger, feed_id);
                 """
             )
             self._migrate_feed_rules_sender_column(conn)
@@ -577,6 +602,108 @@ class MessageStore:
                 due.append(feed)
         return due
 
+    def create_activity_log_entry(self, data: dict[str, Any]) -> sqlite3.Row:
+        metadata = data.get("metadata") or {}
+        metadata_json = json.dumps(metadata, sort_keys=True, separators=(",", ":"))
+        with self.connect() as conn:
+            cursor = conn.execute(
+                """
+                INSERT INTO activity_log_entries(
+                    operation_type, status, trigger, feed_id, feed_title_snapshot,
+                    publication_target, imported_count, skipped_count, feed_count,
+                    file_count, started_at, completed_at, duration_ms,
+                    error_summary, error_detail, metadata_json
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    data["operation_type"],
+                    data["status"],
+                    data["trigger"],
+                    data.get("feed_id"),
+                    data.get("feed_title_snapshot"),
+                    data.get("publication_target"),
+                    data.get("imported_count"),
+                    data.get("skipped_count"),
+                    data.get("feed_count"),
+                    data.get("file_count"),
+                    data.get("started_at"),
+                    data.get("completed_at") or iso_now(),
+                    int(data.get("duration_ms") or 0),
+                    data.get("error_summary"),
+                    data.get("error_detail"),
+                    metadata_json,
+                ),
+            )
+            self._prune_activity_log_entries(conn)
+            return conn.execute(
+                "SELECT * FROM activity_log_entries WHERE id = ?",
+                (cursor.lastrowid,),
+            ).fetchone()
+
+    def list_activity_log_entries(
+        self,
+        *,
+        limit: int,
+        offset: int = 0,
+        operation_type: str | None = None,
+        status: str | None = None,
+        trigger: str | None = None,
+        feed_id: int | None = None,
+    ) -> list[sqlite3.Row]:
+        where, values = _activity_log_where(
+            operation_type=operation_type,
+            status=status,
+            trigger=trigger,
+            feed_id=feed_id,
+        )
+        values.extend([limit, offset])
+        with self.connect() as conn:
+            return list(
+                conn.execute(
+                    f"""
+                    SELECT *
+                    FROM activity_log_entries
+                    {where}
+                    ORDER BY completed_at DESC, id DESC
+                    LIMIT ? OFFSET ?
+                    """,
+                    values,
+                )
+            )
+
+    def count_activity_log_entries(
+        self,
+        *,
+        operation_type: str | None = None,
+        status: str | None = None,
+        trigger: str | None = None,
+        feed_id: int | None = None,
+    ) -> int:
+        where, values = _activity_log_where(
+            operation_type=operation_type,
+            status=status,
+            trigger=trigger,
+            feed_id=feed_id,
+        )
+        with self.connect() as conn:
+            row = conn.execute(f"SELECT COUNT(*) FROM activity_log_entries {where}", values).fetchone()
+            return row[0] if row else 0
+
+    def _prune_activity_log_entries(self, conn: sqlite3.Connection, *, keep: int = 1000) -> None:
+        conn.execute(
+            """
+            DELETE FROM activity_log_entries
+            WHERE id NOT IN (
+                SELECT id
+                FROM activity_log_entries
+                ORDER BY completed_at DESC, id DESC
+                LIMIT ?
+            )
+            """,
+            (keep,),
+        )
+
 
 def folders_from_row(feed: sqlite3.Row | dict[str, Any]) -> list[str]:
     raw = feed["folders_json"] if "folders_json" in feed.keys() else feed["folders"]
@@ -584,6 +711,32 @@ def folders_from_row(feed: sqlite3.Row | dict[str, Any]) -> list[str]:
         parsed = json.loads(raw)
         return [str(item) for item in parsed]
     return [str(item) for item in raw]
+
+
+def _activity_log_where(
+    *,
+    operation_type: str | None = None,
+    status: str | None = None,
+    trigger: str | None = None,
+    feed_id: int | None = None,
+) -> tuple[str, list[Any]]:
+    clauses: list[str] = []
+    values: list[Any] = []
+    if operation_type:
+        clauses.append("operation_type = ?")
+        values.append(operation_type)
+    if status:
+        clauses.append("status = ?")
+        values.append(status)
+    if trigger:
+        clauses.append("trigger = ?")
+        values.append(trigger)
+    if feed_id is not None:
+        clauses.append("feed_id = ?")
+        values.append(feed_id)
+    if not clauses:
+        return "", values
+    return "WHERE " + " AND ".join(clauses), values
 
 
 def _settings_int(value: object, default: int) -> int:

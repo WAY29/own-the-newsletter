@@ -4,8 +4,10 @@ from collections.abc import Callable, Mapping
 import logging
 from pathlib import Path
 import sqlite3
+from time import perf_counter
 from typing import Any
 
+from .activity_log import ActivityLogRecorder
 from .publication import (
     GitHubFileChange,
     GitHubPublicationClient,
@@ -36,91 +38,179 @@ class FeedPublisher:
         *,
         cipher: CredentialCipher | None = None,
         github_client_factory: GitHubClientFactory | None = None,
+        activity_log_recorder: ActivityLogRecorder | None = None,
     ) -> None:
         self.store = store
         self.feeds_dir = feeds_dir
         self.public_origin = public_origin.rstrip("/")
         self.cipher = cipher
         self.github_client_factory = github_client_factory or GitHubPublicationClient
+        self.activity_log_recorder = activity_log_recorder or ActivityLogRecorder(store)
         self.renderer = RssRenderer()
         self.feeds_dir.mkdir(parents=True, exist_ok=True)
 
-    def publish(self, feed: sqlite3.Row) -> None:
+    def publish(
+        self,
+        feed: sqlite3.Row,
+        *,
+        trigger: str = "feed_change_publication",
+        record_activity: bool = True,
+    ) -> bool:
         settings = self.store.get_publication_settings(include_token_encrypted=True)
-        self._write_feed_files(feed, settings)
-        if settings["active_target"] == "github":
+        target = str(settings["active_target"])
+        started = perf_counter()
+        if record_activity:
             self.store.mark_publication_started(feed)
-            try:
+        try:
+            self._write_feed_files(feed, settings)
+            if target == "github":
                 self._publish_github_feed(feed, settings)
-            except Exception as exc:
-                error = _safe_publication_error(exc)
+        except Exception as exc:
+            error = _safe_publication_error(exc)
+            if record_activity:
                 self.store.mark_publication_finished(status="failed", error=error, feed=feed)
-                logger.warning("RSS publication failed feed_id=%s error=%s", feed["id"], error)
-                return
+                self._record_publish(
+                    trigger=trigger,
+                    status="failed",
+                    publication_target=target,
+                    feed=feed,
+                    feed_count=1,
+                    file_count=2,
+                    started=started,
+                    error=error,
+                )
+            logger.warning("RSS publication failed feed_id=%s error=%s", feed["id"], error)
+            return False
+        if record_activity:
             self.store.mark_publication_finished(status="success", feed=feed)
+            self._record_publish(
+                trigger=trigger,
+                status="success",
+                publication_target=target,
+                feed=feed,
+                feed_count=1,
+                file_count=2,
+                started=started,
+            )
+        return True
 
-    def publish_by_id(self, feed_id: int) -> None:
+    def publish_by_id(self, feed_id: int, *, trigger: str = "manual_sync") -> None:
         feed = self.store.get_feed(feed_id)
         if feed is not None:
-            self.publish(feed)
+            self.publish(feed, trigger=trigger)
 
     def publish_all(
         self,
         *,
         strict_external: bool = False,
         publication_settings: Mapping[str, Any] | None = None,
+        trigger: str = "publication_retry",
+        record_activity: bool = True,
     ) -> None:
         settings = dict(publication_settings or self.store.get_publication_settings(include_token_encrypted=True))
-        self.store.mark_publication_started()
+        target = str(settings["active_target"])
+        started = perf_counter()
+        feeds = self.store.list_feeds()
+        feed_count = len(feeds)
+        file_count = feed_count * 2
+        if record_activity:
+            self.store.mark_publication_started()
         try:
             github_client = None
             changes: list[GitHubFileChange] = []
             feed_titles: list[str] = []
-            if settings["active_target"] == "github":
+            if target == "github":
                 github_client = self._github_client(settings)
                 github_client.validate_write_access()
-            for feed in self.store.list_feeds():
+            for feed in feeds:
                 self._write_feed_files(feed, settings)
                 if github_client is not None:
                     changes.extend(self._github_feed_changes(feed, settings))
                     feed_titles.append(_commit_feed_title(feed))
             if github_client is not None:
+                file_count = len(changes)
                 github_client.commit_files(changes, _publish_all_message(feed_titles))
         except Exception as exc:
             error = _safe_publication_error(exc)
-            self.store.mark_publication_finished(status="failed", error=error)
+            if record_activity:
+                self.store.mark_publication_finished(status="failed", error=error)
+                self._record_publish(
+                    trigger=trigger,
+                    status="failed",
+                    publication_target=target,
+                    feed_count=feed_count,
+                    file_count=file_count,
+                    started=started,
+                    error=error,
+                    metadata={"scope": "all_feeds"},
+                )
             logger.warning("RSS publication failed error=%s", error)
             if strict_external:
                 raise PublicationError(error) from exc
             return
-        self.store.mark_publication_finished(status="success")
+        if record_activity:
+            self.store.mark_publication_finished(status="success")
+            self._record_publish(
+                trigger=trigger,
+                status="success",
+                publication_target=target,
+                feed_count=feed_count,
+                file_count=file_count,
+                started=started,
+                metadata={"scope": "all_feeds"},
+            )
 
     def activate_github(self) -> dict[str, Any]:
         settings = self.store.get_publication_settings(include_token_encrypted=True)
         candidate = {**settings, "active_target": "github"}
-        self.publish_all(strict_external=True, publication_settings=candidate)
+        self.publish_all(
+            strict_external=True,
+            publication_settings=candidate,
+            trigger="publication_activation",
+        )
         self.store.update_publication_settings({"active_target": "github"})
         return self.store.get_publication_settings()
 
     def activate_backend(self) -> dict[str, Any]:
         self.store.update_publication_settings({"active_target": "backend"})
-        self.publish_all(publication_settings=self.store.get_publication_settings(include_token_encrypted=True))
+        self.publish_all(
+            publication_settings=self.store.get_publication_settings(include_token_encrypted=True),
+            trigger="publication_activation",
+        )
         return self.store.get_publication_settings()
 
     def feed_path(self, slug: str, *, raw: bool = False) -> Path:
         suffix = ".raw.xml" if raw else ".xml"
         return self.feeds_dir / f"{slug}{suffix}"
 
-    def delete_files(self, slug: str) -> None:
+    def delete_files(self, slug: str) -> int:
+        deleted = 0
         for raw in (False, True):
             path = self.feed_path(slug, raw=raw)
             if path.exists():
                 path.unlink()
+                deleted += 1
+        return deleted
 
-    def delete_feed(self, feed: sqlite3.Row) -> None:
-        self.delete_files(str(feed["random_slug"]))
+    def delete_feed(self, feed: sqlite3.Row, *, trigger: str = "feed_change_publication") -> None:
+        deleted_count = self.delete_files(str(feed["random_slug"]))
         settings = self.store.get_publication_settings(include_token_encrypted=True)
-        if settings["active_target"] != "github":
+        target = str(settings["active_target"])
+        started = perf_counter()
+        file_count = max(2, deleted_count)
+        if target != "github":
+            self.store.mark_publication_started(feed)
+            self.store.mark_publication_finished(status="success", feed=feed)
+            self._record_publish(
+                trigger=trigger,
+                status="success",
+                publication_target=target,
+                feed=feed,
+                feed_count=1,
+                file_count=file_count,
+                started=started,
+                metadata={"action": "delete"},
+            )
             return
         self.store.mark_publication_started(feed)
         try:
@@ -130,9 +220,30 @@ class FeedPublisher:
         except Exception as exc:
             error = _safe_publication_error(exc)
             self.store.mark_publication_finished(status="failed", error=error, feed=feed)
+            self._record_publish(
+                trigger=trigger,
+                status="failed",
+                publication_target=target,
+                feed=feed,
+                feed_count=1,
+                file_count=2,
+                started=started,
+                error=error,
+                metadata={"action": "delete"},
+            )
             logger.warning("RSS publication delete failed feed_id=%s error=%s", feed["id"], error)
             return
         self.store.mark_publication_finished(status="success", feed=feed)
+        self._record_publish(
+            trigger=trigger,
+            status="success",
+            publication_target=target,
+            feed=feed,
+            feed_count=1,
+            file_count=2,
+            started=started,
+            metadata={"action": "delete"},
+        )
 
     def _write_feed_files(self, feed: sqlite3.Row, publication_settings: Mapping[str, Any]) -> None:
         self._write(feed, raw=False, publication_settings=publication_settings)
@@ -210,6 +321,32 @@ class FeedPublisher:
             token=token,
         )
         return self.github_client_factory(config)
+
+    def _record_publish(
+        self,
+        *,
+        trigger: str,
+        status: str,
+        publication_target: str,
+        feed_count: int,
+        file_count: int,
+        started: float,
+        feed: sqlite3.Row | None = None,
+        error: str | None = None,
+        metadata: Mapping[str, Any] | None = None,
+    ) -> None:
+        self.activity_log_recorder.record_publish(
+            trigger=trigger,
+            status=status,
+            publication_target=publication_target,
+            feed_id=int(feed["id"]) if feed is not None else None,
+            feed_title=str(feed["title"]) if feed is not None else None,
+            feed_count=feed_count,
+            file_count=file_count,
+            duration_ms=int((perf_counter() - started) * 1000),
+            error=error,
+            metadata=metadata,
+        )
 
 
 def _safe_publication_error(exc: Exception) -> str:

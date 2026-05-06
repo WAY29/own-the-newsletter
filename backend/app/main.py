@@ -12,6 +12,7 @@ from fastapi import Cookie, Depends, FastAPI, HTTPException, Query, Request, Res
 from fastapi.responses import FileResponse
 
 from .body_processor import BodyProcessor
+from .activity_log import ActivityLogQuery, ActivityLogRecorder
 from .config import Settings, get_settings
 from .feed_publisher import FeedPublisher
 from .imap_source import ImapSource
@@ -35,6 +36,16 @@ SESSION_COOKIE = "onn_session"
 logger = logging.getLogger(__name__)
 FeedSortBy = Literal["created_at", "updated_at", "title", "item_count", "last_sync"]
 SortDir = Literal["asc", "desc"]
+ActivityOperation = Literal["sync", "publish"]
+ActivityStatus = Literal["success", "failed", "skipped"]
+ActivityTrigger = Literal[
+    "manual_sync",
+    "scheduled_sync",
+    "initial_sync",
+    "publication_retry",
+    "publication_activation",
+    "feed_change_publication",
+]
 
 
 def create_app(
@@ -48,12 +59,15 @@ def create_app(
     store = MessageStore(settings.database_path)
     store.init_db()
     cipher = CredentialCipher(settings.secret_key)
+    activity_log_recorder = ActivityLogRecorder(store)
+    activity_log_query = ActivityLogQuery(store)
     publisher = FeedPublisher(
         store,
         settings.feeds_dir,
         settings.public_origin,
         cipher=cipher,
         github_client_factory=github_client_factory,
+        activity_log_recorder=activity_log_recorder,
     )
     sync_engine = SyncEngine(
         store=store,
@@ -62,6 +76,7 @@ def create_app(
         body_processor=BodyProcessor(),
         publisher=publisher,
         imap_timeout_seconds=settings.imap_timeout_seconds,
+        activity_log_recorder=activity_log_recorder,
     )
     scheduler = BackendScheduler(sync_engine, settings.scheduler_tick_seconds)
 
@@ -77,6 +92,8 @@ def create_app(
     app.state.store = store
     app.state.sync_engine = sync_engine
     app.state.publisher = publisher
+    app.state.activity_log_recorder = activity_log_recorder
+    app.state.activity_log_query = activity_log_query
 
     @app.middleware("http")
     async def log_requests(request: Request, call_next):
@@ -191,8 +208,27 @@ def create_app(
 
     @app.post("/api/publication/retry")
     def retry_publication(_admin: bool = Depends(require_admin)) -> dict[str, Any]:
-        publisher.publish_all()
+        publisher.publish_all(trigger="publication_retry")
         return {"settings": store.get_publication_settings()}
+
+    @app.get("/api/activity-logs")
+    def list_activity_logs(
+        page: Annotated[int, Query(ge=1)] = 1,
+        page_size: Annotated[int, Query(ge=1, le=100)] = 50,
+        operation_type: Annotated[ActivityOperation | None, Query()] = None,
+        status: Annotated[ActivityStatus | None, Query()] = None,
+        trigger: Annotated[ActivityTrigger | None, Query()] = None,
+        feed_id: Annotated[int | None, Query(ge=1)] = None,
+        _admin: bool = Depends(require_admin),
+    ) -> dict[str, Any]:
+        return activity_log_query.list(
+            page=page,
+            page_size=page_size,
+            operation_type=operation_type,
+            status=status,
+            trigger=trigger,
+            feed_id=feed_id,
+        )
 
     @app.get("/api/feeds")
     def list_feeds(
@@ -252,8 +288,8 @@ def create_app(
         data["imap_password_encrypted"] = cipher.encrypt(password)
         data["random_slug"] = secrets.token_urlsafe(24)
         feed = store.create_feed(data)
-        publisher.publish(feed)
-        sync_engine.sync_feed(int(feed["id"]), manual=False)
+        publisher.publish(feed, trigger="feed_change_publication")
+        sync_engine.sync_feed(int(feed["id"]), manual=False, trigger="initial_sync")
         feed = store.get_feed(int(feed["id"])) or feed
         return {
             "feed": _serialize_feed(
@@ -297,7 +333,7 @@ def create_app(
         feed = store.update_feed(feed_id, updates)
         if feed is None:
             raise HTTPException(status_code=404, detail="Feed not found")
-        publisher.publish(feed)
+        publisher.publish(feed, trigger="feed_change_publication")
         return {
             "feed": _serialize_feed(
                 feed,
@@ -312,7 +348,7 @@ def create_app(
         feed = store.get_feed(feed_id)
         if feed is None:
             raise HTTPException(status_code=404, detail="Feed not found")
-        publisher.delete_feed(feed)
+        publisher.delete_feed(feed, trigger="feed_change_publication")
         store.delete_feed(feed_id)
         return {"deleted": True}
 
@@ -320,7 +356,7 @@ def create_app(
     def sync_feed(feed_id: int, _admin: bool = Depends(require_admin)) -> dict[str, Any]:
         if store.get_feed(feed_id) is None:
             raise HTTPException(status_code=404, detail="Feed not found")
-        result = sync_engine.sync_feed(feed_id, manual=True)
+        result = sync_engine.sync_feed(feed_id, manual=True, trigger="manual_sync")
         return result.__dict__
 
     @app.get("/api/feeds/{feed_id}/status")
@@ -338,7 +374,7 @@ def create_app(
         raw = body == "raw"
         path = publisher.feed_path(slug, raw=raw)
         if not path.exists():
-            publisher.publish(feed)
+            publisher.publish(feed, record_activity=False)
         if not path.exists():
             raise HTTPException(status_code=404, detail="Feed file not found")
         return FileResponse(path, media_type="application/rss+xml; charset=utf-8")

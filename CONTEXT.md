@@ -144,6 +144,18 @@ _Avoid_: Manual Sync, backfill rerun, feed rebuild
 The **Feed Publication Settings** view that summarizes target health and exposes **Publication Retry**.
 _Avoid_: Feed list status column by default, log-only status
 
+**Activity Log**:
+An admin-visible history of completed **Read-only Sync** and publication operations that records trigger, outcome, timing, counts, and redacted errors as **Private Logs**.
+_Avoid_: Process log, status history, message debug log
+
+**Activity Trigger**:
+The cause of an **Activity Log** entry, such as manual action, scheduled sync, initial feed sync, publication retry, publication activation, or feed-change publication.
+_Avoid_: Unlabeled background work, button-only action
+
+**Activity Log Retention**:
+The first-version limit that keeps the most recent 1000 **Activity Log** entries.
+_Avoid_: Unlimited log history, configurable log archive
+
 **Static Feed File**:
 A clean or raw RSS XML file published to an external static **Publication Target** for one **RSS Feed**.
 _Avoid_: Dynamic feed endpoint, sync state file
@@ -290,6 +302,15 @@ _Avoid_: Deleted feed item
 - **Publication Retry** republishes current **RSS Feeds** without changing **Sync Status**
 - **Publication Retry** updates **Publication Status**
 - **Publication Overview** displays **Publication Status** and **Publication Retry** in **Feed Publication Settings**
+- The **Admin Panel** exposes an **Activity Log** for **Read-only Sync** and publication operations
+- An **Activity Log** records manually triggered and scheduled **Read-only Sync** operations
+- An **Activity Log** records **Feed Publish**, **Publication Retry**, **Publication Activation**, and publication deletion outcomes for all active **Publication Targets**
+- An **Activity Log** records sync and publication as separate entries even when one user or scheduler action causes both
+- An **Activity Log** records one **Activity Trigger** per entry
+- An **Activity Log** keeps the **Feed Title** context for deleted **Feed Rules**
+- An **Activity Log** records completed operations, while running operations remain visible through **Sync Status** and **Publication Status**
+- An **Activity Log** follows **Activity Log Retention**
+- An **Activity Log** preserves **Private Log** redaction boundaries
 - The **Admin Panel** can trigger **Manual Sync** for a **Feed Rule**
 - The **Admin Panel**, backend API, and **Feed Endpoints** share one **Public Origin** in production
 - The **Public Origin** uses one **URL Namespace**
@@ -459,6 +480,14 @@ _Avoid_: Deleted feed item
 > **Domain expert:** "No - the directory is the repo write location, while **RSS Public URL Prefix** is the externally served base URL for subscribers."
 > **Dev:** "If GitHub publication fails, should the administrator run **Manual Sync** again?"
 > **Domain expert:** "No - use **Publication Retry** to republish current RSS files without reading IMAP."
+> **Dev:** "Should the Logs page read raw backend process logs?"
+> **Domain expert:** "No - show the **Activity Log** for scheduled/manual sync and publication operations, while keeping raw process logs outside the Admin Panel."
+> **Dev:** "If a manual sync imports messages and then GitHub publishing fails, is that one failed log entry?"
+> **Domain expert:** "No - record sync and publication separately so the **Sync Status** can succeed while **Publication Status** fails."
+> **Dev:** "If the active target is the backend, do publish logs disappear?"
+> **Domain expert:** "No - **Activity Log** records publication outcomes for both backend and external **Publication Targets**."
+> **Dev:** "Can the Logs page replace the current running status indicators?"
+> **Domain expert:** "No - the **Activity Log** records completed operations only; running operations remain visible through current status fields."
 > **Dev:** "Should the app create the GitHub branch if the administrator mistypes it?"
 > **Domain expert:** "No - **Publication Validation** requires an existing **GitHub Branch** with write permission."
 > **Dev:** "Does successful activation prove the public Pages URL is already reachable?"
@@ -512,6 +541,22 @@ _Avoid_: Deleted feed item
 - "部署多个后端实例" is out of first-version scope; use one **Single Backend Instance** per database.
 - "同步失败" is visible as **Sync Status**, not only as process logs.
 - "日志" means **Private Logs**; do not log email bodies, passwords, full email addresses, or full **Random Feed URLs**.
+- "日志查看页面" is resolved as an **Activity Log** page in the **Admin Panel**, not raw process log browsing and not only latest status fields.
+- "日志范围" for the first Logs page covers scheduled/manual **Read-only Sync** and publication operations, not every admin action.
+- "日志粒度" is resolved as separate sync and publication entries, not one combined result for a chained operation.
+- "日志触发来源" is resolved as **Activity Trigger** with manual, scheduled, initial, retry, activation, and feed-change publication causes.
+- "日志筛选" starts with operation type, status, trigger, and feed filters; full-text log search is not part of the first resolved scope.
+- "日志生命周期" is completed-operation history only; running work is represented by **Sync Status** and **Publication Status**, not by incomplete **Activity Log** entries.
+- "日志保留" is **Activity Log Retention** of the most recent 1000 entries for the first version.
+- "日志列表字段" starts with time, operation, trigger, feed, status, duration, counts, and redacted error summary.
+- "发布日志范围" includes backend local file publication and external static publication, not only GitHub failures.
+- "删除 Feed 后的日志" preserves the feed id and **Feed Title** snapshot instead of deleting historical entries.
+- "发布日志计数" is resolved as feed and file counts; sync logs continue to use imported and skipped counts.
+- "非同步/发布操作" such as **Rule Preview**, **Publication Validation** field checks, login, and settings saves are excluded from the first **Activity Log** scope.
+- "日志刷新" includes manual refresh and an optional auto-refresh toggle; the **Activity Log** still records completed operations only.
+- "日志自动刷新" uses a 10-second interval when enabled.
+- "日志默认视图" is newest-first, unfiltered, and paginated at 50 entries per page.
+- "日志错误展示" uses redacted error summaries in the list with an expandable redacted detail for longer errors.
 - "IMAP收到的邮件" was resolved as messages in configured **Sync Folders**, not every folder in the account.
 - "首次导入" is bounded by a **Backfill Window**, not by the mailbox's full history.
 - "重建 Feed" or "重新回溯" is out of first-version Admin Panel scope.

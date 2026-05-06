@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { BrowserRouter, Routes, Route, Navigate, useNavigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, NavLink, useNavigate } from "react-router-dom";
 import { api } from "./api";
 import { RssIcon, LogOutIcon, SettingsIcon } from "./components/icons";
 import { Button } from "./components/ui";
 import LoginPage from "./pages/LoginPage";
 import FeedsPage from "./pages/FeedsPage";
+import LogsPage from "./pages/LogsPage";
 import SettingsModal from "./pages/SettingsModal";
 import "./styles.css";
 
@@ -42,9 +43,19 @@ function AppShell() {
   return (
     <div className="app-shell">
       <header className="app-header">
-        <div className="app-header-brand" onClick={() => navigate("/")} style={{ cursor: "pointer" }}>
-          <RssIcon width={18} height={18} />
-          <span>Own New Newsletter</span>
+        <div className="app-header-left">
+          <div className="app-header-brand" onClick={() => navigate("/")} style={{ cursor: "pointer" }}>
+            <RssIcon width={18} height={18} />
+            <span>Own New Newsletter</span>
+          </div>
+          <nav className="app-nav" aria-label="Admin sections">
+            <NavLink to="/" end className={({ isActive }) => `app-nav-link ${isActive ? "app-nav-link-active" : ""}`}>
+              Feeds
+            </NavLink>
+            <NavLink to="/logs" className={({ isActive }) => `app-nav-link ${isActive ? "app-nav-link-active" : ""}`}>
+              Logs
+            </NavLink>
+          </nav>
         </div>
         <div className="app-header-actions">
           <Button variant="ghost" size="sm" onClick={() => setSettingsOpen(true)}>
@@ -57,6 +68,7 @@ function AppShell() {
       </header>
       <Routes>
         <Route path="/" element={<FeedsPage onLogout={handleLogout} />} />
+        <Route path="/logs" element={<LogsPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
       <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />

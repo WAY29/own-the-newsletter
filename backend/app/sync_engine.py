@@ -8,8 +8,10 @@ import json
 import logging
 import sqlite3
 import threading
+from time import perf_counter
 from typing import Any
 
+from .activity_log import ActivityLogRecorder
 from .body_processor import BodyProcessor
 from .email_parser import ParsedEmail, parse_email
 from .feed_publisher import FeedPublisher
@@ -42,6 +44,7 @@ class SyncEngine:
         body_processor: BodyProcessor,
         publisher: FeedPublisher,
         imap_timeout_seconds: int,
+        activity_log_recorder: ActivityLogRecorder | None = None,
     ) -> None:
         self.store = store
         self.cipher = cipher
@@ -49,6 +52,7 @@ class SyncEngine:
         self.body_processor = body_processor
         self.publisher = publisher
         self.imap_timeout_seconds = imap_timeout_seconds
+        self.activity_log_recorder = activity_log_recorder or ActivityLogRecorder(store)
         self._locks: dict[int, threading.Lock] = {}
         self._locks_guard = threading.Lock()
 
@@ -113,23 +117,31 @@ class SyncEngine:
             "scanned_count": len(messages),
         }
 
-    def sync_feed(self, feed_id: int, *, manual: bool) -> SyncResult:
+    def sync_feed(self, feed_id: int, *, manual: bool, trigger: str | None = None) -> SyncResult:
+        activity_trigger = trigger or ("manual_sync" if manual else "scheduled_sync")
+        started = perf_counter()
         lock = self._lock_for(feed_id)
         if not lock.acquire(blocking=False):
             feed = self.store.get_feed(feed_id)
-            self.store.mark_sync_finished(
-                feed_id,
-                status="skipped",
-                imported_count=0,
-                skipped_count=0,
-                error="Sync skipped because another sync is already running.",
-            )
-            return self._result_for_feed(feed, SyncResult(status="skipped"), feed_id=feed_id)
+            error = "Sync skipped because another sync is already running."
+            if feed is not None:
+                self.store.mark_sync_finished(
+                    feed_id,
+                    status="skipped",
+                    imported_count=0,
+                    skipped_count=0,
+                    error=error,
+                )
+            result = self._result_for_feed(feed, SyncResult(status="skipped", error=error), feed_id=feed_id)
+            self._record_sync_result(result, trigger=activity_trigger, started=started)
+            return result
         feed = None
         try:
             feed = self.store.get_feed(feed_id)
             if feed is None:
-                return SyncResult(status="missing", error="Feed not found", feed_id=feed_id)
+                result = SyncResult(status="skipped", error="Feed not found", feed_id=feed_id)
+                self._record_sync_result(result, trigger=activity_trigger, started=started)
+                return result
             self.store.mark_sync_started(feed_id)
             result = self._sync_single_feed(feed)
             result = self._result_for_feed(feed, result)
@@ -141,8 +153,9 @@ class SyncEngine:
                 error=result.error,
                 first_sync_completed=result.status == "success",
             )
+            self._record_sync_result(result, trigger=activity_trigger, started=started)
             if result.status == "success":
-                self.publisher.publish_by_id(feed_id)
+                self.publisher.publish_by_id(feed_id, trigger=activity_trigger)
             return result
         except Exception as exc:  # pragma: no cover - exercised through integration
             error = redact_sensitive(str(exc))
@@ -153,28 +166,42 @@ class SyncEngine:
                 skipped_count=0,
                 error=error,
             )
-            return self._result_for_feed(feed, SyncResult(status="failed", error=error), feed_id=feed_id)
+            result = self._result_for_feed(feed, SyncResult(status="failed", error=error), feed_id=feed_id)
+            self._record_sync_result(result, trigger=activity_trigger, started=started)
+            return result
         finally:
             lock.release()
 
     def sync_due_feeds(self) -> list[SyncResult]:
         feeds = self.store.feeds_due_for_sync()
-        return self.sync_feeds_grouped([int(feed["id"]) for feed in feeds])
+        return self.sync_feeds_grouped([int(feed["id"]) for feed in feeds], trigger="scheduled_sync")
 
-    def sync_feeds_grouped(self, feed_ids: list[int]) -> list[SyncResult]:
+    def sync_feeds_grouped(self, feed_ids: list[int], *, trigger: str = "scheduled_sync") -> list[SyncResult]:
         feeds = [self.store.get_feed(feed_id) for feed_id in feed_ids]
         feeds = [feed for feed in feeds if feed is not None]
         acquired: list[tuple[int, threading.Lock]] = []
         runnable: list[sqlite3.Row] = []
         results: list[SyncResult] = []
+        started_by_feed: dict[int, float] = {}
         for feed in feeds:
             feed_id = int(feed["id"])
             lock = self._lock_for(feed_id)
             if not lock.acquire(blocking=False):
-                results.append(self._result_for_feed(feed, SyncResult(status="skipped")))
+                error = "Sync skipped because another sync is already running."
+                self.store.mark_sync_finished(
+                    feed_id,
+                    status="skipped",
+                    imported_count=0,
+                    skipped_count=0,
+                    error=error,
+                )
+                result = self._result_for_feed(feed, SyncResult(status="skipped", error=error))
+                self._record_sync_result(result, trigger=trigger, started=perf_counter())
+                results.append(result)
                 continue
             acquired.append((feed_id, lock))
             runnable.append(feed)
+            started_by_feed[feed_id] = perf_counter()
             self.store.mark_sync_started(feed_id)
         try:
             groups: dict[str, list[sqlite3.Row]] = defaultdict(list)
@@ -195,21 +222,25 @@ class SyncEngine:
                     error=result.error,
                     first_sync_completed=result.status == "success",
                 )
+                self._record_sync_result(result, trigger=trigger, started=started_by_feed.get(feed_id, perf_counter()))
                 if result.status == "success":
-                    self.publisher.publish_by_id(feed_id)
+                    self.publisher.publish_by_id(feed_id, trigger=trigger)
                 results.append(result)
             return results
         except Exception as exc:  # pragma: no cover - defensive
             error = redact_sensitive(str(exc))
             for feed in runnable:
+                feed_id = int(feed["id"])
                 self.store.mark_sync_finished(
-                    int(feed["id"]),
+                    feed_id,
                     status="failed",
                     imported_count=0,
                     skipped_count=0,
                     error=error,
                 )
-                results.append(self._result_for_feed(feed, SyncResult(status="failed", error=error)))
+                result = self._result_for_feed(feed, SyncResult(status="failed", error=error))
+                self._record_sync_result(result, trigger=trigger, started=started_by_feed.get(feed_id, perf_counter()))
+                results.append(result)
             return results
         finally:
             for _feed_id, lock in acquired:
@@ -455,6 +486,18 @@ class SyncEngine:
             error=result.error,
             feed_id=feed_id if feed_id is not None else result.feed_id,
             feed_title=feed_title,
+        )
+
+    def _record_sync_result(self, result: SyncResult, *, trigger: str, started: float) -> None:
+        self.activity_log_recorder.record_sync(
+            trigger=trigger,
+            status=result.status,
+            feed_id=result.feed_id,
+            feed_title=result.feed_title,
+            imported_count=result.imported_count,
+            skipped_count=result.skipped_count,
+            duration_ms=int((perf_counter() - started) * 1000),
+            error=result.error,
         )
 
 

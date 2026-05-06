@@ -57,6 +57,57 @@ export type FeedListResponse = {
   };
 };
 
+export type ActivityOperation = "sync" | "publish";
+export type ActivityStatus = "success" | "failed" | "skipped";
+export type ActivityTrigger =
+  | "manual_sync"
+  | "scheduled_sync"
+  | "initial_sync"
+  | "publication_retry"
+  | "publication_activation"
+  | "feed_change_publication";
+
+export type ActivityLogEntry = {
+  id: number;
+  operation_type: ActivityOperation;
+  status: ActivityStatus;
+  trigger: ActivityTrigger;
+  feed_id: number | null;
+  feed_title: string | null;
+  feed: { id: number | null; title: string | null } | null;
+  publication_target: "backend" | "github" | null;
+  imported_count: number | null;
+  skipped_count: number | null;
+  feed_count: number | null;
+  file_count: number | null;
+  started_at: string | null;
+  completed_at: string;
+  duration_ms: number;
+  error_summary: string | null;
+  error_detail: string | null;
+  metadata: Record<string, unknown>;
+};
+
+export type ActivityLogParams = {
+  page?: number;
+  page_size?: number;
+  operation_type?: ActivityOperation | "";
+  status?: ActivityStatus | "";
+  trigger?: ActivityTrigger | "";
+  feed_id?: number | "";
+};
+
+export type ActivityLogResponse = {
+  entries: ActivityLogEntry[];
+  pagination: FeedListPagination;
+  filters: {
+    operation_type: ActivityOperation | null;
+    status: ActivityStatus | null;
+    trigger: ActivityTrigger | null;
+    feed_id: number | null;
+  };
+};
+
 export type FeedForm = {
   title: string;
   sender: string;
@@ -203,10 +254,10 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   return response.json() as Promise<T>;
 }
 
-function queryString(params: FeedListParams): string {
+function queryString(params: Record<string, unknown>): string {
   const search = new URLSearchParams();
   for (const [key, value] of Object.entries(params)) {
-    if (value !== undefined) search.set(key, String(value));
+    if (value !== undefined && value !== "") search.set(key, String(value));
   }
   const query = search.toString();
   return query ? `?${query}` : "";
@@ -239,6 +290,8 @@ export const api = {
     request<{ settings: PublicationSettings }>("/api/publication/backend/activate", { method: "POST" }),
   retryPublication: () =>
     request<{ settings: PublicationSettings }>("/api/publication/retry", { method: "POST" }),
+  listActivityLogs: (params: ActivityLogParams = {}) =>
+    request<ActivityLogResponse>(`/api/activity-logs${queryString(params)}`),
   listFeeds: (params: FeedListParams = {}) => request<FeedListResponse>(`/api/feeds${queryString(params)}`),
   getFeed: (id: number) => request<{ feed: Feed }>(`/api/feeds/${id}`),
   createFeed: (feed: FeedForm) =>

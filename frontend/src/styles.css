@@ -93,6 +93,13 @@ button, input, select, textarea {
   justify-content: space-between;
 }
 
+.app-header-left {
+  display: flex;
+  align-items: center;
+  gap: 22px;
+  min-width: 0;
+}
+
 .app-header-brand {
   display: flex;
   align-items: center;
@@ -107,6 +114,32 @@ button, input, select, textarea {
   width: 20px;
   height: 20px;
   color: var(--accent);
+}
+
+.app-nav {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.app-nav-link {
+  border-radius: 999px;
+  color: var(--text-tertiary);
+  font-size: 13px;
+  font-weight: 510;
+  padding: 6px 11px;
+  transition: background 120ms ease, color 120ms ease;
+}
+
+.app-nav-link:hover {
+  background: var(--surface-04);
+  color: var(--text-secondary);
+}
+
+.app-nav-link-active,
+.app-nav-link-active:hover {
+  background: rgba(113, 112, 255, 0.14);
+  color: var(--text-primary);
 }
 
 .app-header-actions {
@@ -532,8 +565,134 @@ button, input, select, textarea {
 .status-running .status-badge-dot { background: var(--warning); }
 .status-running { color: var(--warning); background: rgba(245, 166, 35, 0.1); }
 
+.status-skipped .status-badge-dot { background: var(--warning); }
+.status-skipped { color: var(--warning); background: rgba(245, 166, 35, 0.1); }
+
 .status-never .status-badge-dot { background: var(--text-quaternary); }
 .status-never { color: var(--text-quaternary); background: var(--surface-04); }
+
+/* Logs */
+.logs-content {
+  width: min(1180px, calc(100vw - 48px));
+}
+
+.log-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.log-filters {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(150px, 1fr)) auto;
+  gap: 12px;
+  align-items: end;
+  margin-bottom: 16px;
+}
+
+.log-filters label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.log-filters label span {
+  color: var(--text-tertiary);
+  font-size: 12px;
+  font-weight: 510;
+}
+
+.log-card {
+  padding: 0;
+  overflow: hidden;
+}
+
+.log-table-wrap {
+  overflow-x: auto;
+}
+
+.log-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.log-table th {
+  background: rgba(255, 255, 255, 0.02);
+  border-bottom: 1px solid var(--border-standard);
+  color: var(--text-tertiary);
+  font-size: 12px;
+  font-weight: 510;
+  padding: 10px 14px;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.log-table td {
+  border-bottom: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
+  padding: 12px 14px;
+  vertical-align: top;
+}
+
+.log-table tr:last-child td {
+  border-bottom: none;
+}
+
+.log-table tbody tr:hover {
+  background: var(--surface-02);
+}
+
+.log-time,
+.log-duration,
+.log-counts {
+  color: var(--text-tertiary);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.log-feed-cell {
+  color: var(--text-primary);
+  min-width: 150px;
+}
+
+.log-error-cell {
+  max-width: 360px;
+  min-width: 220px;
+  overflow-wrap: anywhere;
+}
+
+.log-detail-toggle {
+  background: transparent;
+  border: none;
+  color: var(--accent-hover);
+  cursor: pointer;
+  display: block;
+  font-size: 12px;
+  font-weight: 510;
+  margin-top: 6px;
+  padding: 0;
+}
+
+.log-detail-toggle:hover {
+  color: var(--text-primary);
+}
+
+.log-error-cell pre {
+  background: rgba(0, 0, 0, 0.24);
+  border: 1px solid var(--border-standard);
+  border-radius: 6px;
+  color: var(--text-secondary);
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 12px;
+  line-height: 1.45;
+  margin-top: 8px;
+  max-height: 180px;
+  overflow: auto;
+  padding: 8px 10px;
+  white-space: pre-wrap;
+}
 
 /* Empty state */
 .empty-state {
@@ -718,6 +877,20 @@ button, input, select, textarea {
 @media (max-width: 640px) {
   .app-header {
     padding: 0 16px;
+    height: auto;
+    min-height: 52px;
+    gap: 10px;
+  }
+
+  .app-header-left {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 6px;
+    padding: 10px 0;
+  }
+
+  .app-nav-link {
+    padding: 5px 9px;
   }
 
   .app-header-actions {
@@ -743,7 +916,20 @@ button, input, select, textarea {
     grid-template-columns: 1fr;
   }
 
-  .feed-table-wrap {
+  .log-header-actions {
+    flex-wrap: wrap;
+  }
+
+  .log-filters {
+    grid-template-columns: 1fr;
+  }
+
+  .logs-content {
+    width: calc(100vw - 32px);
+  }
+
+  .feed-table-wrap,
+  .log-table-wrap {
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
   }
