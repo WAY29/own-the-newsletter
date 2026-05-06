@@ -71,6 +71,11 @@ export type FeedForm = {
   sync_interval_minutes: number;
 };
 
+export type AdminSettings = {
+  default_proxy_url: string;
+  default_sync_interval_minutes: number;
+};
+
 export type PreviewResult = {
   match_count: number;
   scanned_count: number;
@@ -192,6 +197,12 @@ export const api = {
       body: JSON.stringify({ token })
     }),
   logout: () => request<{ authenticated: boolean }>("/api/auth/logout", { method: "POST" }),
+  getSettings: () => request<{ settings: AdminSettings }>("/api/settings"),
+  updateSettings: (settings: AdminSettings) =>
+    request<{ settings: AdminSettings }>("/api/settings", {
+      method: "PUT",
+      body: JSON.stringify(settings)
+    }),
   listFeeds: (params: FeedListParams = {}) => request<FeedListResponse>(`/api/feeds${queryString(params)}`),
   getFeed: (id: number) => request<{ feed: Feed }>(`/api/feeds/${id}`),
   createFeed: (feed: FeedForm) =>

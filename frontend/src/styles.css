@@ -109,6 +109,12 @@ button, input, select, textarea {
   color: var(--accent);
 }
 
+.app-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .app-content {
   flex: 1;
   width: min(960px, calc(100vw - 48px));
@@ -593,6 +599,20 @@ button, input, select, textarea {
   white-space: pre-line;
 }
 
+.success-msg {
+  background: rgba(39, 166, 68, 0.08);
+  border: 1px solid rgba(39, 166, 68, 0.2);
+  border-radius: 6px;
+  color: var(--green);
+  font-size: 13px;
+  padding: 8px 12px;
+}
+
+.modal-body .error-msg,
+.modal-body .success-msg {
+  margin-top: 16px;
+}
+
 /* Toast */
 .toast {
   position: fixed;
@@ -696,6 +716,18 @@ button, input, select, textarea {
 
 /* Responsive */
 @media (max-width: 640px) {
+  .app-header {
+    padding: 0 16px;
+  }
+
+  .app-header-actions {
+    gap: 4px;
+  }
+
+  .app-header-actions .btn {
+    padding: 6px 8px;
+  }
+
   .app-content {
     width: calc(100vw - 32px);
     padding: 20px 0 48px;
@@ -806,4 +838,10 @@ button, input, select, textarea {
   align-items: center;
   gap: 10px;
   margin-top: 20px;
+}
+
+.settings-intro {
+  font-size: 13px;
+  color: var(--text-tertiary);
+  margin-bottom: 20px;
 }

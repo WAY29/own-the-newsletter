@@ -2,14 +2,16 @@ import React, { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter, Routes, Route, Navigate, useNavigate } from "react-router-dom";
 import { api } from "./api";
-import { RssIcon, LogOutIcon } from "./components/icons";
+import { RssIcon, LogOutIcon, SettingsIcon } from "./components/icons";
 import { Button } from "./components/ui";
 import LoginPage from "./pages/LoginPage";
 import FeedsPage from "./pages/FeedsPage";
+import SettingsModal from "./pages/SettingsModal";
 import "./styles.css";
 
 function AppShell() {
   const [auth, setAuth] = useState<boolean | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -44,14 +46,20 @@ function AppShell() {
           <RssIcon width={18} height={18} />
           <span>Own New Newsletter</span>
         </div>
-        <Button variant="ghost" size="sm" onClick={handleLogout}>
-          <LogOutIcon /> Log out
-        </Button>
+        <div className="app-header-actions">
+          <Button variant="ghost" size="sm" onClick={() => setSettingsOpen(true)}>
+            <SettingsIcon /> Settings
+          </Button>
+          <Button variant="ghost" size="sm" onClick={handleLogout}>
+            <LogOutIcon /> Log out
+          </Button>
+        </div>
       </header>
       <Routes>
         <Route path="/" element={<FeedsPage onLogout={handleLogout} />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
+      <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
     </div>
   );
 }

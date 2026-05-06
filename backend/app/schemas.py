@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import Literal
+from urllib.parse import urlsplit
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -36,7 +37,7 @@ class FeedBase(ImapPreviewBase):
     title: str = Field(min_length=1, max_length=200)
     backfill_days: int = Field(default=30, ge=0, le=3650)
     retention_count: int = Field(default=50, ge=1, le=1000)
-    sync_interval_minutes: int = Field(default=60, ge=0, le=10080)
+    sync_interval_minutes: int | None = Field(default=None, ge=0, le=10080)
 
 
 class FeedCreate(FeedBase):
@@ -73,3 +74,23 @@ class FeedUpdate(BaseModel):
 class PreviewRequest(ImapPreviewBase):
     imap_password: str = Field(min_length=1, max_length=4096)
     limit_per_folder: int = Field(default=50, ge=1, le=200)
+
+
+class AdminSettingsPayload(BaseModel):
+    default_proxy_url: str = Field(default="", max_length=2048)
+    default_sync_interval_minutes: int = Field(default=60, ge=0, le=10080)
+
+    @field_validator("default_proxy_url", mode="before")
+    @classmethod
+    def normalize_default_proxy_url(cls, value: object) -> str:
+        if value is None:
+            return ""
+        if not isinstance(value, str):
+            raise ValueError("Proxy URL must be a string")
+        proxy_url = value.strip()
+        if not proxy_url:
+            return ""
+        parsed = urlsplit(proxy_url)
+        if parsed.scheme not in {"http", "https", "socks5", "socks5h"} or not parsed.netloc:
+            raise ValueError("Proxy URL must be an http, https, socks5, or socks5h URL")
+        return proxy_url

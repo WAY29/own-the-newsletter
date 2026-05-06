@@ -1,8 +1,13 @@
 import { FormEvent, useEffect, useState } from "react";
-import { api, Feed, FeedForm, PreviewResult } from "../api";
+import { api, type AdminSettings, Feed, FeedForm, PreviewResult } from "../api";
 import { Button, Field, Input, Modal, Select, Textarea } from "../components/ui";
 
-function emptyForm(): FeedForm {
+const FALLBACK_SETTINGS: AdminSettings = {
+  default_proxy_url: "",
+  default_sync_interval_minutes: 60
+};
+
+function emptyForm(settings: AdminSettings = FALLBACK_SETTINGS): FeedForm {
   return {
     title: "",
     sender: "",
@@ -14,7 +19,7 @@ function emptyForm(): FeedForm {
     folders: ["INBOX"],
     backfill_days: 30,
     retention_count: 50,
-    sync_interval_minutes: 60
+    sync_interval_minutes: settings.default_sync_interval_minutes
   };
 }
 
@@ -34,9 +39,9 @@ function formFromFeed(feed: Feed): FeedForm {
   };
 }
 
-function formWithRecentImapSettings(feed: Feed): FeedForm {
+function formWithRecentImapSettings(feed: Feed, settings: AdminSettings): FeedForm {
   return {
-    ...emptyForm(),
+    ...emptyForm(settings),
     imap_host: feed.imap_host,
     imap_port: feed.imap_port,
     imap_tls: feed.imap_tls,
@@ -93,10 +98,24 @@ export default function FeedEditorModal({
       });
     } else {
       setExistingFeed(null);
-      api.listFeeds({ page: 1, page_size: 1, sort_by: "created_at", sort_dir: "desc" }).then((result) => {
+      Promise.allSettled([
+        api.getSettings(),
+        api.listFeeds({ page: 1, page_size: 1, sort_by: "created_at", sort_dir: "desc" })
+      ]).then(([settingsResult, feedsResult]) => {
         if (cancelled) return;
-        const recentFeed = result.feeds[0];
-        setForm(recentFeed ? formWithRecentImapSettings(recentFeed) : emptyForm());
+        const settings = settingsResult.status === "fulfilled" ? settingsResult.value.settings : FALLBACK_SETTINGS;
+        const recentFeed = feedsResult.status === "fulfilled" ? feedsResult.value.feeds[0] : undefined;
+        setForm(recentFeed ? formWithRecentImapSettings(recentFeed, settings) : emptyForm(settings));
+        if (settingsResult.status === "rejected" || feedsResult.status === "rejected") {
+          const messages: string[] = [];
+          if (settingsResult.status === "rejected") {
+            messages.push("Could not load Settings defaults. Using built-in defaults.");
+          }
+          if (feedsResult.status === "rejected") {
+            messages.push("Could not load recent IMAP settings. Enter them manually.");
+          }
+          setError(messages.join("\n"));
+        }
         setBusy(null);
       }).catch(() => {
         if (cancelled) return;

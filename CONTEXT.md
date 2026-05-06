@@ -20,6 +20,14 @@ _Avoid_: Untested mailbox configuration
 A password- or token-protected web interface for managing **IMAP Accounts** and **Feed Rules**.
 _Avoid_: Static feed configuration, public user portal
 
+**Settings**:
+Admin-managed default values applied when creating a new **Feed Rule**.
+_Avoid_: Runtime Configuration, bulk feed edit, startup settings
+
+**Default Proxy**:
+An optional proxy URL saved in **Settings** as the future default for feed sources that fetch remote RSS.
+_Avoid_: Nginx reverse proxy, frontend API proxy, IMAP proxy
+
 **Manual Sync**:
 An administrator-triggered **Read-only Sync** for one **Feed Rule** that imports new messages without rerunning the **Backfill Window**.
 _Avoid_: User-facing refresh, mailbox mutation, group-wide sync
@@ -195,6 +203,11 @@ _Avoid_: Deleted feed item
 ## Relationships
 
 - The **Admin Panel** manages per-feed **IMAP Accounts** and **Feed Rules**
+- The **Admin Panel** manages **Settings**
+- **Settings** provide defaults for new **Feed Rules**
+- **Settings** can define one **Default Proxy**
+- Changing **Settings** does not change existing **Feed Rules**
+- **Default Proxy** does not affect current **IMAP Accounts**
 - The **Admin Panel** can trigger **Manual Sync** for a **Feed Rule**
 - The **Admin Panel**, backend API, and **Feed Endpoints** share one **Public Origin** in production
 - The **Public Origin** uses one **URL Namespace**
@@ -254,6 +267,10 @@ _Avoid_: Deleted feed item
 > **Domain expert:** "Yes - **Sender Filter** matching is lowercased containment against the raw source header values."
 > **Dev:** "Do we add a new feed by editing the configuration file?"
 > **Domain expert:** "No - use the **Admin Panel**; **Runtime Configuration** only contains startup-level settings and secrets."
+> **Dev:** "If I change **Settings**, do existing feeds inherit the new defaults?"
+> **Domain expert:** "No - **Settings** only prefill new **Feed Rules**; existing **Feed Rules** keep their own values."
+> **Dev:** "Does the **Default Proxy** change how current IMAP sync connects?"
+> **Domain expert:** "No - it is saved for future remote RSS feed sources and does not affect current **IMAP Accounts**."
 > **Dev:** "Can an administrator test a feed without waiting for the schedule?"
 > **Domain expert:** "Yes - use **Manual Sync** for that **Feed Rule**."
 > **Dev:** "If that feed shares a **Mailbox Sync Group**, does manual sync update every feed in the group?"
@@ -348,6 +365,8 @@ _Avoid_: Deleted feed item
 - "用户提供IMAP相关凭据" is resolved as configuring a per-feed **IMAP Account** through the **Admin Panel**, not creating an application user account.
 - "保存 IMAP 账号" means saving a **Verified IMAP Account**, not merely storing typed fields.
 - "配置文件" is not the source of truth for RSS/feed configuration; **Runtime Configuration** comes from environment variables or `.env`.
+- "系统设置" is resolved as **Settings** managed in the **Admin Panel** for new-feed defaults, not **Runtime Configuration** and not a bulk update to existing **Feed Rules**.
+- "代理设置" is resolved as **Default Proxy** for future remote RSS feed sources, not the production reverse proxy, Vite dev proxy, or current IMAP synchronization path.
 - "配置备份/迁移" is file-level backup of SQLite, local feed files, and `.env`/Secret Key; UI import/export is out of first-version scope.
 - "Cloudflare Worker 支持" is out of first-version scope and does not shape the initial architecture.
 - "第一版 Admin Panel" includes feed CRUD, rule preview, sync status, random RSS URL display, and **Manual Sync**.

@@ -16,7 +16,7 @@ from .config import Settings, get_settings
 from .feed_publisher import FeedPublisher
 from .imap_source import ImapSource
 from .logging_config import configure_logging, safe_log_text
-from .schemas import FeedCreate, FeedUpdate, LoginRequest, PreviewRequest
+from .schemas import AdminSettingsPayload, FeedCreate, FeedUpdate, LoginRequest, PreviewRequest
 from .scheduler import BackendScheduler
 from .security import CredentialCipher, constant_time_equal, new_secret_token, token_hash
 from .store import MessageStore, folders_from_row
@@ -134,6 +134,17 @@ def create_app(settings: Settings | None = None, imap_source: ImapSource | None 
     def me(_admin: bool = Depends(require_admin)) -> dict[str, bool]:
         return {"authenticated": True}
 
+    @app.get("/api/settings")
+    def get_admin_settings(_admin: bool = Depends(require_admin)) -> dict[str, Any]:
+        return {"settings": store.get_admin_settings()}
+
+    @app.put("/api/settings")
+    def update_admin_settings(
+        payload: AdminSettingsPayload,
+        _admin: bool = Depends(require_admin),
+    ) -> dict[str, Any]:
+        return {"settings": store.update_admin_settings(payload.model_dump())}
+
     @app.get("/api/feeds")
     def list_feeds(
         page: Annotated[int, Query(ge=1)] = 1,
@@ -173,6 +184,8 @@ def create_app(settings: Settings | None = None, imap_source: ImapSource | None 
     @app.post("/api/feeds")
     def create_feed(payload: FeedCreate, _admin: bool = Depends(require_admin)) -> dict[str, Any]:
         data = payload.model_dump()
+        if data.get("sync_interval_minutes") is None:
+            data["sync_interval_minutes"] = store.get_admin_settings()["default_sync_interval_minutes"]
         try:
             sync_engine.validate_feed_settings(data)
         except Exception as exc:

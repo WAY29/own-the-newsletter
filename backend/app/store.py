@@ -16,6 +16,11 @@ FEED_SORT_COLUMNS = {
     "last_sync": "fr.last_sync_finished_at",
 }
 
+DEFAULT_ADMIN_SETTINGS = {
+    "default_proxy_url": "",
+    "default_sync_interval_minutes": 60,
+}
+
 
 class MessageStore:
     def __init__(self, database_path: Path) -> None:
@@ -99,6 +104,12 @@ class MessageStore:
                     created_at TEXT NOT NULL,
                     expires_at TEXT NOT NULL
                 );
+
+                CREATE TABLE IF NOT EXISTS admin_settings (
+                    setting_key TEXT PRIMARY KEY,
+                    setting_value TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                );
                 """
             )
             self._migrate_feed_rules_sender_column(conn)
@@ -131,6 +142,43 @@ class MessageStore:
     def delete_expired_sessions(self) -> None:
         with self.connect() as conn:
             conn.execute("DELETE FROM admin_sessions WHERE expires_at <= ?", (iso_now(),))
+
+    def get_admin_settings(self) -> dict[str, Any]:
+        settings = dict(DEFAULT_ADMIN_SETTINGS)
+        with self.connect() as conn:
+            rows = conn.execute("SELECT setting_key, setting_value FROM admin_settings").fetchall()
+        for row in rows:
+            key = row["setting_key"]
+            if key not in settings:
+                continue
+            settings[key] = row["setting_value"]
+        return {
+            "default_proxy_url": str(settings["default_proxy_url"]),
+            "default_sync_interval_minutes": _settings_int(
+                settings["default_sync_interval_minutes"],
+                DEFAULT_ADMIN_SETTINGS["default_sync_interval_minutes"],
+            ),
+        }
+
+    def update_admin_settings(self, data: dict[str, Any]) -> dict[str, Any]:
+        values = {
+            "default_proxy_url": str(data["default_proxy_url"]),
+            "default_sync_interval_minutes": str(int(data["default_sync_interval_minutes"])),
+        }
+        now = iso_now()
+        with self.connect() as conn:
+            for key, value in values.items():
+                conn.execute(
+                    """
+                    INSERT INTO admin_settings(setting_key, setting_value, updated_at)
+                    VALUES (?, ?, ?)
+                    ON CONFLICT(setting_key)
+                    DO UPDATE SET setting_value = excluded.setting_value,
+                                  updated_at = excluded.updated_at
+                    """,
+                    (key, value, now),
+                )
+        return self.get_admin_settings()
 
     def list_feeds(
         self,
@@ -432,3 +480,10 @@ def folders_from_row(feed: sqlite3.Row | dict[str, Any]) -> list[str]:
         parsed = json.loads(raw)
         return [str(item) for item in parsed]
     return [str(item) for item in raw]
+
+
+def _settings_int(value: object, default: int) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
