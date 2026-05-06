@@ -35,9 +35,12 @@ def constant_time_equal(left: str, right: str) -> bool:
 
 _EMAIL_RE = re.compile(r"([A-Za-z0-9._%+\-])[A-Za-z0-9._%+\-]*(@[A-Za-z0-9.\-]+\.[A-Za-z]{2,})")
 _FEED_URL_RE = re.compile(r"(/f/)[A-Za-z0-9_\-]{16,}(\.xml)")
+_STATIC_FEED_FILE_RE = re.compile(r"(?<![A-Za-z0-9_\-])[A-Za-z0-9_\-]{16,}(\.raw\.xml|\.xml)")
+_GITHUB_TOKEN_RE = re.compile(r"\b(?:gh[pousr]_[A-Za-z0-9_\-]+|github_pat_[A-Za-z0-9_\-]+)\b")
 
 
 def redact_sensitive(value: str) -> str:
     redacted = _EMAIL_RE.sub(r"\1***\2", value)
-    return _FEED_URL_RE.sub(r"\1***\2", redacted)
-
+    redacted = _GITHUB_TOKEN_RE.sub("***", redacted)
+    redacted = _FEED_URL_RE.sub(r"\1***\2", redacted)
+    return _STATIC_FEED_FILE_RE.sub(r"***\1", redacted)

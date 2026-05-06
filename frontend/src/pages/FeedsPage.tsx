@@ -8,10 +8,6 @@ import {
 } from "../components/icons";
 import FeedEditorModal from "./FeedEditorPage";
 
-function feedUrlForCurrentOrigin(feed: Feed): string {
-  return new URL(`/f/${encodeURIComponent(feed.random_slug)}.xml`, window.location.origin).toString();
-}
-
 const PAGE_SIZE = 25;
 
 const SORT_COLUMNS: Array<{ key: FeedSortBy; label: string }> = [
@@ -125,7 +121,7 @@ export default function FeedsPage({ onLogout }: { onLogout: () => void }) {
 
   async function handleCopy(feed: Feed) {
     try {
-      await navigator.clipboard.writeText(feedUrlForCurrentOrigin(feed));
+      await navigator.clipboard.writeText(feed.feed_url);
       setCopiedId(feed.id);
       setTimeout(() => setCopiedId(null), 2000);
     } catch {

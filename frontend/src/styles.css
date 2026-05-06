@@ -845,3 +845,199 @@ button, input, select, textarea {
   color: var(--text-tertiary);
   margin-bottom: 20px;
 }
+
+.settings-tabs {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 20px;
+  padding: 4px;
+  background: var(--surface-02);
+  border: 1px solid var(--border-standard);
+  border-radius: 8px;
+}
+
+.settings-tab {
+  flex: 1;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 510;
+  padding: 8px 10px;
+  transition: background 120ms ease, color 120ms ease;
+}
+
+.settings-tab:hover {
+  color: var(--text-secondary);
+}
+
+.settings-tab-active {
+  background: var(--surface-05);
+  color: var(--text-primary);
+}
+
+.publication-overview {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 14px;
+  margin-bottom: 20px;
+  padding: 14px;
+  background: rgba(255, 255, 255, 0.025);
+  border: 1px solid var(--border-standard);
+  border-radius: 8px;
+}
+
+.publication-overview > div {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 5px;
+  min-width: 0;
+}
+
+.publication-overview strong {
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 510;
+  overflow-wrap: anywhere;
+}
+
+.publication-overview-label {
+  color: var(--text-quaternary);
+  font-size: 11px;
+  font-weight: 510;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.publication-overview-error {
+  grid-column: 1 / -1;
+  background: rgba(229, 72, 77, 0.08);
+  border: 1px solid rgba(229, 72, 77, 0.16);
+  border-radius: 6px;
+  color: var(--danger);
+  font-size: 12px;
+  padding: 8px 10px;
+  white-space: pre-line;
+}
+
+.publication-target-selector {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.publication-target-option {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+  border: 1px solid var(--border-standard);
+  border-radius: 8px;
+  background: var(--surface-02);
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 12px;
+  text-align: left;
+  transition: background 120ms ease, border-color 120ms ease, box-shadow 120ms ease;
+}
+
+.publication-target-option:hover {
+  background: var(--surface-04);
+  border-color: rgba(255, 255, 255, 0.14);
+}
+
+.publication-target-option-active {
+  background: rgba(113, 112, 255, 0.1);
+  border-color: rgba(113, 112, 255, 0.42);
+  box-shadow: 0 0 0 1px rgba(113, 112, 255, 0.12) inset;
+}
+
+.publication-target-option span {
+  min-width: 0;
+}
+
+.publication-target-option strong,
+.publication-target-panel h3 {
+  display: block;
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 510;
+  letter-spacing: -0.1px;
+}
+
+.publication-target-option small,
+.publication-target-panel p {
+  display: block;
+  color: var(--text-tertiary);
+  font-size: 12px;
+  line-height: 1.4;
+  margin-top: 4px;
+}
+
+.publication-target-option em,
+.publication-target-current {
+  display: inline-flex;
+  border: 1px solid rgba(113, 112, 255, 0.28);
+  border-radius: 999px;
+  color: var(--accent-hover);
+  flex-shrink: 0;
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 510;
+  line-height: 1;
+  padding: 4px 7px;
+  white-space: nowrap;
+}
+
+.publication-target-panel {
+  margin-bottom: 4px;
+  padding: 14px;
+  background: rgba(255, 255, 255, 0.025);
+  border: 1px solid var(--border-standard);
+  border-radius: 8px;
+}
+
+.publication-target-current {
+  margin-top: 12px;
+}
+
+.settings-actions {
+  justify-content: space-between;
+}
+
+.settings-actions-primary {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  min-width: 0;
+}
+
+.settings-close-action {
+  margin-left: auto;
+}
+
+@media (max-width: 640px) {
+  .publication-overview,
+  .publication-target-selector {
+    grid-template-columns: 1fr;
+  }
+
+  .settings-actions {
+    align-items: stretch;
+    flex-wrap: wrap;
+  }
+
+  .settings-actions-primary {
+    width: 100%;
+  }
+
+  .settings-close-action {
+    margin-left: auto;
+  }
+}

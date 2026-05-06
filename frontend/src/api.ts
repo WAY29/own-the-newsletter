@@ -76,6 +76,29 @@ export type AdminSettings = {
   default_sync_interval_minutes: number;
 };
 
+export type PublicationSettings = {
+  active_target: "backend" | "github";
+  github_repository: string;
+  github_branch: string;
+  github_directory: string;
+  github_public_url: string;
+  github_token_present: boolean;
+  last_publication_started_at: string | null;
+  last_publication_finished_at: string | null;
+  last_publication_status: string | null;
+  last_publication_error: string | null;
+  last_publication_feed_id: number | null;
+  last_publication_feed_title: string | null;
+};
+
+export type PublicationSettingsForm = {
+  github_repository: string;
+  github_branch: string;
+  github_directory: string;
+  github_public_url: string;
+  github_token?: string;
+};
+
 export type PreviewResult = {
   match_count: number;
   scanned_count: number;
@@ -203,6 +226,19 @@ export const api = {
       method: "PUT",
       body: JSON.stringify(settings)
     }),
+  getPublicationSettings: () =>
+    request<{ settings: PublicationSettings }>("/api/publication/settings"),
+  updatePublicationSettings: (settings: PublicationSettingsForm) =>
+    request<{ settings: PublicationSettings }>("/api/publication/settings", {
+      method: "PUT",
+      body: JSON.stringify(settings)
+    }),
+  activateGithubPublication: () =>
+    request<{ settings: PublicationSettings }>("/api/publication/github/activate", { method: "POST" }),
+  activateBackendPublication: () =>
+    request<{ settings: PublicationSettings }>("/api/publication/backend/activate", { method: "POST" }),
+  retryPublication: () =>
+    request<{ settings: PublicationSettings }>("/api/publication/retry", { method: "POST" }),
   listFeeds: (params: FeedListParams = {}) => request<FeedListResponse>(`/api/feeds${queryString(params)}`),
   getFeed: (id: number) => request<{ feed: Feed }>(`/api/feeds/${id}`),
   createFeed: (feed: FeedForm) =>

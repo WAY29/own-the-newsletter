@@ -21,6 +21,23 @@ DEFAULT_ADMIN_SETTINGS = {
     "default_sync_interval_minutes": 60,
 }
 
+DEFAULT_PUBLICATION_SETTINGS = {
+    "active_target": "backend",
+    "github_repository": "",
+    "github_branch": "main",
+    "github_directory": "feeds",
+    "github_public_url": "",
+    "github_token_encrypted": "",
+    "last_publication_started_at": "",
+    "last_publication_finished_at": "",
+    "last_publication_status": "",
+    "last_publication_error": "",
+    "last_publication_feed_id": "",
+    "last_publication_feed_title": "",
+}
+
+PUBLICATION_SETTING_KEYS = set(DEFAULT_PUBLICATION_SETTINGS)
+
 
 class MessageStore:
     def __init__(self, database_path: Path) -> None:
@@ -179,6 +196,93 @@ class MessageStore:
                     (key, value, now),
                 )
         return self.get_admin_settings()
+
+    def get_publication_settings(self, *, include_token_encrypted: bool = False) -> dict[str, Any]:
+        settings = dict(DEFAULT_PUBLICATION_SETTINGS)
+        with self.connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT setting_key, setting_value
+                FROM admin_settings
+                WHERE setting_key LIKE 'publication_%'
+                """
+            ).fetchall()
+        for row in rows:
+            key = str(row["setting_key"]).removeprefix("publication_")
+            if key in PUBLICATION_SETTING_KEYS:
+                settings[key] = row["setting_value"]
+        token_encrypted = str(settings["github_token_encrypted"])
+        result: dict[str, Any] = {
+            "active_target": _publication_target(settings["active_target"]),
+            "github_repository": str(settings["github_repository"]),
+            "github_branch": str(settings["github_branch"] or DEFAULT_PUBLICATION_SETTINGS["github_branch"]),
+            "github_directory": str(settings["github_directory"]),
+            "github_public_url": str(settings["github_public_url"]),
+            "github_token_present": bool(token_encrypted),
+            "last_publication_started_at": _empty_to_none(settings["last_publication_started_at"]),
+            "last_publication_finished_at": _empty_to_none(settings["last_publication_finished_at"]),
+            "last_publication_status": _empty_to_none(settings["last_publication_status"]),
+            "last_publication_error": _empty_to_none(settings["last_publication_error"]),
+            "last_publication_feed_id": _optional_int(settings["last_publication_feed_id"]),
+            "last_publication_feed_title": _empty_to_none(settings["last_publication_feed_title"]),
+        }
+        if include_token_encrypted:
+            result["github_token_encrypted"] = token_encrypted
+        return result
+
+    def update_publication_settings(self, data: dict[str, Any]) -> dict[str, Any]:
+        values: dict[str, str] = {}
+        for key, value in data.items():
+            if key not in PUBLICATION_SETTING_KEYS:
+                continue
+            if key == "active_target":
+                values[key] = _publication_target(value)
+            elif value is not None:
+                values[key] = str(value)
+        if not values:
+            return self.get_publication_settings()
+
+        now = iso_now()
+        with self.connect() as conn:
+            for key, value in values.items():
+                conn.execute(
+                    """
+                    INSERT INTO admin_settings(setting_key, setting_value, updated_at)
+                    VALUES (?, ?, ?)
+                    ON CONFLICT(setting_key)
+                    DO UPDATE SET setting_value = excluded.setting_value,
+                                  updated_at = excluded.updated_at
+                    """,
+                    (f"publication_{key}", value, now),
+                )
+        return self.get_publication_settings()
+
+    def mark_publication_started(self, feed: sqlite3.Row | None = None) -> None:
+        values: dict[str, Any] = {
+            "last_publication_started_at": iso_now(),
+            "last_publication_status": "running",
+            "last_publication_error": "",
+            "last_publication_feed_id": str(feed["id"]) if feed is not None else "",
+            "last_publication_feed_title": str(feed["title"]) if feed is not None else "",
+        }
+        self.update_publication_settings(values)
+
+    def mark_publication_finished(
+        self,
+        *,
+        status: str,
+        error: str | None = None,
+        feed: sqlite3.Row | None = None,
+    ) -> None:
+        values: dict[str, Any] = {
+            "last_publication_finished_at": iso_now(),
+            "last_publication_status": status,
+            "last_publication_error": error or "",
+        }
+        if feed is not None:
+            values["last_publication_feed_id"] = str(feed["id"])
+            values["last_publication_feed_title"] = str(feed["title"])
+        self.update_publication_settings(values)
 
     def list_feeds(
         self,
@@ -487,3 +591,24 @@ def _settings_int(value: object, default: int) -> int:
         return int(value)
     except (TypeError, ValueError):
         return default
+
+
+def _empty_to_none(value: object) -> str | None:
+    text = str(value)
+    return text if text else None
+
+
+def _optional_int(value: object) -> int | None:
+    if value in (None, ""):
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _publication_target(value: object) -> str:
+    target = str(value)
+    if target not in {"backend", "github"}:
+        return DEFAULT_PUBLICATION_SETTINGS["active_target"]
+    return target

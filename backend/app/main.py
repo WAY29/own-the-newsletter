@@ -16,7 +16,15 @@ from .config import Settings, get_settings
 from .feed_publisher import FeedPublisher
 from .imap_source import ImapSource
 from .logging_config import configure_logging, safe_log_text
-from .schemas import AdminSettingsPayload, FeedCreate, FeedUpdate, LoginRequest, PreviewRequest
+from .publication import build_feed_urls
+from .schemas import (
+    AdminSettingsPayload,
+    FeedCreate,
+    FeedUpdate,
+    LoginRequest,
+    PreviewRequest,
+    PublicationSettingsPayload,
+)
 from .scheduler import BackendScheduler
 from .security import CredentialCipher, constant_time_equal, new_secret_token, token_hash
 from .store import MessageStore, folders_from_row
@@ -29,14 +37,24 @@ FeedSortBy = Literal["created_at", "updated_at", "title", "item_count", "last_sy
 SortDir = Literal["asc", "desc"]
 
 
-def create_app(settings: Settings | None = None, imap_source: ImapSource | None = None) -> FastAPI:
+def create_app(
+    settings: Settings | None = None,
+    imap_source: ImapSource | None = None,
+    github_client_factory: Any | None = None,
+) -> FastAPI:
     settings = settings or get_settings()
     configure_logging(settings.log_level)
     settings.ensure_paths()
     store = MessageStore(settings.database_path)
     store.init_db()
     cipher = CredentialCipher(settings.secret_key)
-    publisher = FeedPublisher(store, settings.feeds_dir, settings.public_origin)
+    publisher = FeedPublisher(
+        store,
+        settings.feeds_dir,
+        settings.public_origin,
+        cipher=cipher,
+        github_client_factory=github_client_factory,
+    )
     sync_engine = SyncEngine(
         store=store,
         cipher=cipher,
@@ -145,6 +163,37 @@ def create_app(settings: Settings | None = None, imap_source: ImapSource | None 
     ) -> dict[str, Any]:
         return {"settings": store.update_admin_settings(payload.model_dump())}
 
+    @app.get("/api/publication/settings")
+    def get_publication_settings(_admin: bool = Depends(require_admin)) -> dict[str, Any]:
+        return {"settings": store.get_publication_settings()}
+
+    @app.put("/api/publication/settings")
+    def update_publication_settings(
+        payload: PublicationSettingsPayload,
+        _admin: bool = Depends(require_admin),
+    ) -> dict[str, Any]:
+        data = payload.model_dump()
+        token = data.pop("github_token", None)
+        if token:
+            data["github_token_encrypted"] = cipher.encrypt(token)
+        return {"settings": store.update_publication_settings(data)}
+
+    @app.post("/api/publication/github/activate")
+    def activate_github_publication(_admin: bool = Depends(require_admin)) -> dict[str, Any]:
+        try:
+            return {"settings": publisher.activate_github()}
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @app.post("/api/publication/backend/activate")
+    def activate_backend_publication(_admin: bool = Depends(require_admin)) -> dict[str, Any]:
+        return {"settings": publisher.activate_backend()}
+
+    @app.post("/api/publication/retry")
+    def retry_publication(_admin: bool = Depends(require_admin)) -> dict[str, Any]:
+        publisher.publish_all()
+        return {"settings": store.get_publication_settings()}
+
     @app.get("/api/feeds")
     def list_feeds(
         page: Annotated[int, Query(ge=1)] = 1,
@@ -161,8 +210,17 @@ def create_app(settings: Settings | None = None, imap_source: ImapSource | None 
             sort_by=sort_by,
             sort_dir=sort_dir,
         )
+        publication_settings = store.get_publication_settings()
         return {
-            "feeds": [_serialize_feed(feed, settings, item_count=int(feed["item_count"])) for feed in feeds],
+            "feeds": [
+                _serialize_feed(
+                    feed,
+                    settings,
+                    publication_settings,
+                    item_count=int(feed["item_count"]),
+                )
+                for feed in feeds
+            ],
             "pagination": {
                 "page": page,
                 "page_size": page_size,
@@ -197,14 +255,28 @@ def create_app(settings: Settings | None = None, imap_source: ImapSource | None 
         publisher.publish(feed)
         sync_engine.sync_feed(int(feed["id"]), manual=False)
         feed = store.get_feed(int(feed["id"])) or feed
-        return {"feed": _serialize_feed(feed, settings, item_count=store.count_feed_items(int(feed["id"])))}
+        return {
+            "feed": _serialize_feed(
+                feed,
+                settings,
+                store.get_publication_settings(),
+                item_count=store.count_feed_items(int(feed["id"])),
+            )
+        }
 
     @app.get("/api/feeds/{feed_id}")
     def get_feed(feed_id: int, _admin: bool = Depends(require_admin)) -> dict[str, Any]:
         feed = store.get_feed(feed_id)
         if feed is None:
             raise HTTPException(status_code=404, detail="Feed not found")
-        return {"feed": _serialize_feed(feed, settings, item_count=store.count_feed_items(feed_id))}
+        return {
+            "feed": _serialize_feed(
+                feed,
+                settings,
+                store.get_publication_settings(),
+                item_count=store.count_feed_items(feed_id),
+            )
+        }
 
     @app.put("/api/feeds/{feed_id}")
     def update_feed(feed_id: int, payload: FeedUpdate, _admin: bool = Depends(require_admin)) -> dict[str, Any]:
@@ -226,14 +298,21 @@ def create_app(settings: Settings | None = None, imap_source: ImapSource | None 
         if feed is None:
             raise HTTPException(status_code=404, detail="Feed not found")
         publisher.publish(feed)
-        return {"feed": _serialize_feed(feed, settings, item_count=store.count_feed_items(feed_id))}
+        return {
+            "feed": _serialize_feed(
+                feed,
+                settings,
+                store.get_publication_settings(),
+                item_count=store.count_feed_items(feed_id),
+            )
+        }
 
     @app.delete("/api/feeds/{feed_id}")
     def delete_feed(feed_id: int, _admin: bool = Depends(require_admin)) -> dict[str, bool]:
         feed = store.get_feed(feed_id)
         if feed is None:
             raise HTTPException(status_code=404, detail="Feed not found")
-        publisher.delete_files(feed["random_slug"])
+        publisher.delete_feed(feed)
         store.delete_feed(feed_id)
         return {"deleted": True}
 
@@ -267,7 +346,18 @@ def create_app(settings: Settings | None = None, imap_source: ImapSource | None 
     return app
 
 
-def _serialize_feed(feed, settings: Settings, *, item_count: int = 0) -> dict[str, Any]:
+def _serialize_feed(
+    feed,
+    settings: Settings,
+    publication_settings: dict[str, Any],
+    *,
+    item_count: int = 0,
+) -> dict[str, Any]:
+    urls = build_feed_urls(
+        slug=str(feed["random_slug"]),
+        public_origin=settings.public_origin,
+        publication_settings=publication_settings,
+    )
     return {
         "id": feed["id"],
         "title": feed["title"],
@@ -278,8 +368,8 @@ def _serialize_feed(feed, settings: Settings, *, item_count: int = 0) -> dict[st
         "imap_username": feed["imap_username"],
         "folders": folders_from_row(feed),
         "random_slug": feed["random_slug"],
-        "feed_url": f"{settings.public_origin}/f/{feed['random_slug']}.xml",
-        "raw_feed_url": f"{settings.public_origin}/f/{feed['random_slug']}.xml?body=raw",
+        "feed_url": urls.feed_url,
+        "raw_feed_url": urls.raw_feed_url,
         "backfill_days": feed["backfill_days"],
         "retention_count": feed["retention_count"],
         "sync_interval_minutes": feed["sync_interval_minutes"],

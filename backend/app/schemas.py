@@ -5,6 +5,14 @@ from urllib.parse import urlsplit
 
 from pydantic import BaseModel, Field, field_validator
 
+from .publication import (
+    normalize_github_branch,
+    normalize_github_repository,
+    normalize_github_token,
+    normalize_public_url,
+    normalize_repository_directory,
+)
+
 
 ImapTls = Literal["ssl", "starttls", "none"]
 
@@ -94,3 +102,56 @@ class AdminSettingsPayload(BaseModel):
         if parsed.scheme not in {"http", "https", "socks5", "socks5h"} or not parsed.netloc:
             raise ValueError("Proxy URL must be an http, https, socks5, or socks5h URL")
         return proxy_url
+
+
+class PublicationSettingsPayload(BaseModel):
+    github_repository: str = Field(default="", max_length=512)
+    github_branch: str = Field(default="main", min_length=1, max_length=255)
+    github_directory: str = Field(default="feeds", max_length=1024)
+    github_public_url: str = Field(default="", max_length=2048)
+    github_token: str | None = Field(default=None, max_length=4096)
+
+    @field_validator("github_repository", mode="before")
+    @classmethod
+    def normalize_repository(cls, value: object) -> str:
+        if value is None:
+            return ""
+        if not isinstance(value, str):
+            raise ValueError("GitHub repository must be a string")
+        repository = value.strip()
+        return normalize_github_repository(repository) if repository else ""
+
+    @field_validator("github_branch", mode="before")
+    @classmethod
+    def normalize_branch(cls, value: object) -> str:
+        if not isinstance(value, str):
+            raise ValueError("GitHub branch must be a string")
+        return normalize_github_branch(value)
+
+    @field_validator("github_directory", mode="before")
+    @classmethod
+    def normalize_directory(cls, value: object) -> str:
+        if value is None:
+            return "feeds"
+        if not isinstance(value, str):
+            raise ValueError("Publication directory must be a string")
+        return normalize_repository_directory(value)
+
+    @field_validator("github_public_url", mode="before")
+    @classmethod
+    def normalize_rss_public_url(cls, value: object) -> str:
+        if value is None:
+            return ""
+        if not isinstance(value, str):
+            raise ValueError("RSS public URL must be a string")
+        public_url = value.strip()
+        return normalize_public_url(public_url) if public_url else ""
+
+    @field_validator("github_token", mode="before")
+    @classmethod
+    def normalize_token(cls, value: object) -> str | None:
+        if value is None:
+            return None
+        if not isinstance(value, str):
+            raise ValueError("GitHub token must be a string")
+        return normalize_github_token(value)

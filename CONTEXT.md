@@ -24,6 +24,10 @@ _Avoid_: Static feed configuration, public user portal
 Admin-managed default values applied when creating a new **Feed Rule**.
 _Avoid_: Runtime Configuration, bulk feed edit, startup settings
 
+**Feed Publication Settings**:
+Admin-managed configuration that selects the active **Publication Target** and subscription URL prefix for **RSS Feeds**.
+_Avoid_: Feed Rule settings, Runtime Configuration, bulk feed edit
+
 **Default Proxy**:
 An optional proxy URL saved in **Settings** as the future default for feed sources that fetch remote RSS.
 _Avoid_: Nginx reverse proxy, frontend API proxy, IMAP proxy
@@ -43,6 +47,10 @@ _Avoid_: Feed URL secret, user password, multi-user account
 **Secret Key**:
 A startup-provided encryption key used to protect stored **IMAP Account** credentials.
 _Avoid_: Admin token, generated database secret
+
+**GitHub Publication Token**:
+A sensitive credential that authorizes writes to the configured **GitHub Publication Target**.
+_Avoid_: Admin Token, Secret Key, feed URL secret
 
 **Admin Session**:
 An authenticated browser session that authorizes access to the **Admin Panel**.
@@ -95,6 +103,54 @@ _Avoid_: State database, mailbox archive
 **Feed Publish**:
 The act of rewriting a **Local Feed File** after new **Feed Items** are imported.
 _Avoid_: Request-time feed generation, delayed batch publishing
+
+**Publication Target**:
+The single active destination that supplies subscriber-facing **Feed Endpoints** for published **RSS Feeds**.
+_Avoid_: IMAP backend, sync source, multiple active publish targets
+
+**Backend Publication Target**:
+The default **Publication Target** where the current backend serves **Feed Endpoints** from **Local Feed Files**.
+_Avoid_: GitHub Pages host, admin API backend choice
+
+**GitHub Publication Target**:
+An external **Publication Target** where generated feed files are pushed to a GitHub repository for static hosting.
+_Avoid_: GitHub source control for application code, Cloudflare Worker runtime
+
+**GitHub Repository**:
+The normalized `owner/repo` destination used by a **GitHub Publication Target**.
+_Avoid_: Arbitrary git remote, application source repository by default
+
+**GitHub Branch**:
+An existing branch in a **GitHub Repository** selected for **Static Feed Files**.
+_Avoid_: Auto-created deployment branch, local git branch
+
+**Publication Activation**:
+The admin operation that makes an external **Publication Target** active only after validation and initial publication of current feeds succeed.
+_Avoid_: Blind setting save, background-only first publish
+
+**Publication Validation**:
+The write-readiness check for an external **Publication Target** before **Publication Activation**.
+_Avoid_: Public CDN availability check, syntax-only field validation
+
+**Publication Directory**:
+The repository-relative directory where a **GitHub Publication Target** stores **Static Feed Files**.
+_Avoid_: Public URL path, local feeds directory, absolute path
+
+**Publication Retry**:
+An administrator-triggered attempt to republish current **RSS Feeds** to the active **Publication Target** without running **Read-only Sync**.
+_Avoid_: Manual Sync, backfill rerun, feed rebuild
+
+**Publication Overview**:
+The **Feed Publication Settings** view that summarizes target health and exposes **Publication Retry**.
+_Avoid_: Feed list status column by default, log-only status
+
+**Static Feed File**:
+A clean or raw RSS XML file published to an external static **Publication Target** for one **RSS Feed**.
+_Avoid_: Dynamic feed endpoint, sync state file
+
+**RSS Public URL Prefix**:
+The externally reachable base URL for the active external **Publication Target**. Feed URLs append the **Publication Directory** unless this prefix already includes it.
+_Avoid_: Admin Panel URL, API origin, IMAP URL
 
 **Feed Endpoint**:
 An HTTP URL that serves a **Local Feed File** to a feed reader.
@@ -172,6 +228,10 @@ _Avoid_: Multi-instance sync
 The latest recorded sync result, timestamp, and error summary for an **IMAP Account** or **Feed Rule**.
 _Avoid_: Log-only sync health
 
+**Publication Status**:
+The latest recorded result, timestamp, and error summary for publishing an **RSS Feed** to the active **Publication Target**.
+_Avoid_: Sync Status, log-only publish health
+
 **Private Log**:
 A log entry that records operational metadata without email bodies, passwords, full email addresses, or full **Random Feed URLs**.
 _Avoid_: Full message log, secret-bearing URL log
@@ -204,16 +264,38 @@ _Avoid_: Deleted feed item
 
 - The **Admin Panel** manages per-feed **IMAP Accounts** and **Feed Rules**
 - The **Admin Panel** manages **Settings**
+- The **Admin Panel** manages **Feed Publication Settings**
 - **Settings** provide defaults for new **Feed Rules**
 - **Settings** can define one **Default Proxy**
 - Changing **Settings** does not change existing **Feed Rules**
 - **Default Proxy** does not affect current **IMAP Accounts**
+- **Feed Publication Settings** select exactly one active **Publication Target**
+- **Backend Publication Target** is the default **Publication Target**
+- **GitHub Publication Target** pushes generated feed files after **Feed Publish**
+- **GitHub Publication Target** uses one **GitHub Publication Token**
+- **GitHub Publication Target** writes to one **GitHub Repository**
+- **GitHub Publication Target** writes to one existing **GitHub Branch**
+- **GitHub Publication Token** is not returned to the **Admin Panel** after save
+- **Publication Validation** verifies the **GitHub Repository**, **GitHub Branch**, **GitHub Publication Token**, and **Publication Directory** are writable
+- **Publication Activation** validates a **GitHub Publication Target** before changing the active **Publication Target**
+- **Publication Activation** publishes all current **RSS Feeds** before the external target becomes active
+- **GitHub Publication Target** stores **Static Feed Files** in one **Publication Directory**
+- **Publication Directory** defaults to `feeds` and may be empty only to mean the repository root
+- **RSS Public URL Prefix** maps to the externally served **Publication Target** base URL; copied feed URLs append the **Publication Directory** unless it is already present
+- Each **RSS Feed** has one clean **Static Feed File** and one raw **Static Feed File** when the active target is GitHub
+- Deleting a **Feed Rule** removes that feed's **Static Feed Files** from the active **GitHub Publication Target**
+- **GitHub Publication Target** exposes **Body Mode** through separate static feed files rather than a query parameter
+- **Publication Target** determines which public prefix copied **Random Feed URLs** use
+- **RSS Public URL Prefix** is required when the active **Publication Target** is external
+- **Publication Retry** republishes current **RSS Feeds** without changing **Sync Status**
+- **Publication Retry** updates **Publication Status**
+- **Publication Overview** displays **Publication Status** and **Publication Retry** in **Feed Publication Settings**
 - The **Admin Panel** can trigger **Manual Sync** for a **Feed Rule**
 - The **Admin Panel**, backend API, and **Feed Endpoints** share one **Public Origin** in production
 - The **Public Origin** uses one **URL Namespace**
 - **Runtime Configuration** does not contain **Feed Rules**
 - An **Admin Token** creates an **Admin Session**
-- A **Secret Key** encrypts stored **IMAP Account** credentials
+- A **Secret Key** encrypts stored **IMAP Account** credentials and **GitHub Publication Tokens**
 - The **Admin Panel** requires an **Admin Session**
 - An **Admin Session** has one **Session Expiry**
 - Own New Newsletter can sync one or more **Feed Rules**
@@ -248,6 +330,8 @@ _Avoid_: Deleted feed item
 - A **Read-only Sync** leaves the source mailbox unchanged
 - A **Read-only Sync** is triggered by the **Backend Scheduler** according to a **Sync Schedule**
 - A **Read-only Sync** updates **Sync Status**
+- Publishing to a **Publication Target** updates **Publication Status**
+- A failed **Publication Status** does not change the successful **Sync Status** for imported messages
 - A **Read-only Sync** emits **Private Logs**
 - A **Read-only Sync** reads one or more **Sync Folders**
 - A **Feed Rule** has one **Backfill Window** for its first import
@@ -269,6 +353,12 @@ _Avoid_: Deleted feed item
 > **Domain expert:** "No - use the **Admin Panel**; **Runtime Configuration** only contains startup-level settings and secrets."
 > **Dev:** "If I change **Settings**, do existing feeds inherit the new defaults?"
 > **Domain expert:** "No - **Settings** only prefill new **Feed Rules**; existing **Feed Rules** keep their own values."
+> **Dev:** "Are **Feed Publication Settings** just another default for new feeds?"
+> **Domain expert:** "No - they choose the active **Publication Target** and copied RSS URL prefix for published feeds."
+> **Dev:** "Can both backend and GitHub be active subscriber URLs at the same time?"
+> **Domain expert:** "No - there is one active **Publication Target**; the backend target is the default, and GitHub is an external target."
+> **Dev:** "If GitHub push fails after new messages import, did the sync fail?"
+> **Domain expert:** "No - imported-message sync and external publication have separate statuses, so a failed **Publication Status** does not rewrite **Sync Status**."
 > **Dev:** "Does the **Default Proxy** change how current IMAP sync connects?"
 > **Domain expert:** "No - it is saved for future remote RSS feed sources and does not affect current **IMAP Accounts**."
 > **Dev:** "Can an administrator test a feed without waiting for the schedule?"
@@ -287,6 +377,8 @@ _Avoid_: Deleted feed item
 > **Domain expert:** "No - the **Admin Token** only creates an **Admin Session**; RSS is read through a **Random Feed URL** without an additional token parameter."
 > **Dev:** "Can we use the **Admin Token** to encrypt IMAP passwords?"
 > **Domain expert:** "No - use a separate **Secret Key** so login rotation and credential encryption remain separate."
+> **Dev:** "Can the Admin Panel show the saved **GitHub Publication Token** for editing?"
+> **Domain expert:** "No - it can show whether a token is configured, but the token itself is write-only after save."
 > **Dev:** "Does admin login last forever on a trusted personal machine?"
 > **Domain expert:** "No - each **Admin Session** has a **Session Expiry**, defaulting to 30 days."
 > **Dev:** "Does an **IMAP Account** mean an app login?"
@@ -357,6 +449,20 @@ _Avoid_: Deleted feed item
 > **Domain expert:** "No - **Feed Publish** rewrites the **Local Feed File** after imports."
 > **Dev:** "Do feed readers subscribe directly to files only?"
 > **Domain expert:** "No - **Local Feed Files** are also served through **Feed Endpoints** for normal RSS subscription URLs."
+> **Dev:** "Can a GitHub-hosted raw feed use `?body=raw` like the backend endpoint?"
+> **Domain expert:** "No - static publication uses separate clean and raw feed files, so raw subscriptions use the raw file URL."
+> **Dev:** "When the administrator enables GitHub publication, can copied URLs switch before files are pushed?"
+> **Domain expert:** "No - **Publication Activation** first validates the target and publishes current feeds, then changes the active **Publication Target**."
+> **Dev:** "If a feed is deleted from the Admin Panel, can its GitHub-hosted RSS file stay behind?"
+> **Domain expert:** "No - deleting a **Feed Rule** removes the corresponding **Static Feed Files** from the active **GitHub Publication Target**."
+> **Dev:** "Is the **Publication Directory** the same thing as `RSS_PUBLIC_URL`?"
+> **Domain expert:** "No - the directory is the repo write location, while **RSS Public URL Prefix** is the externally served base URL for subscribers."
+> **Dev:** "If GitHub publication fails, should the administrator run **Manual Sync** again?"
+> **Domain expert:** "No - use **Publication Retry** to republish current RSS files without reading IMAP."
+> **Dev:** "Should the app create the GitHub branch if the administrator mistypes it?"
+> **Domain expert:** "No - **Publication Validation** requires an existing **GitHub Branch** with write permission."
+> **Dev:** "Does successful activation prove the public Pages URL is already reachable?"
+> **Domain expert:** "No - activation proves repository publication succeeded; CDN or Pages availability can lag behind."
 
 ## Flagged ambiguities
 
@@ -366,6 +472,8 @@ _Avoid_: Deleted feed item
 - "保存 IMAP 账号" means saving a **Verified IMAP Account**, not merely storing typed fields.
 - "配置文件" is not the source of truth for RSS/feed configuration; **Runtime Configuration** comes from environment variables or `.env`.
 - "系统设置" is resolved as **Settings** managed in the **Admin Panel** for new-feed defaults, not **Runtime Configuration** and not a bulk update to existing **Feed Rules**.
+- "系统设置添加 RSS 源发布设置" does not redefine **Settings**; it adds **Feed Publication Settings** as a separate settings page in the **Admin Panel**.
+- "发布后端" means the active **Publication Target**, not the FastAPI runtime or IMAP source.
 - "代理设置" is resolved as **Default Proxy** for future remote RSS feed sources, not the production reverse proxy, Vite dev proxy, or current IMAP synchronization path.
 - "配置备份/迁移" is file-level backup of SQLite, local feed files, and `.env`/Secret Key; UI import/export is out of first-version scope.
 - "Cloudflare Worker 支持" is out of first-version scope and does not shape the initial architecture.
@@ -378,6 +486,17 @@ _Avoid_: Deleted feed item
 - "管理员密码token" is resolved as **Admin Token** used for login, not as a feed-reading secret.
 - "多管理员/用户管理" is out of first-version scope; there is one **Admin Token**.
 - "IMAP 密码加密" uses a separate **Secret Key**, not the **Admin Token**.
+- "github token" is resolved as a **GitHub Publication Token** that is encrypted with the **Secret Key** and write-only through the **Admin Panel**.
+- "GitHub 仓库地址" is resolved as a normalized **GitHub Repository** in `owner/repo` form, not an arbitrary git remote.
+- "GitHub 分支" is resolved as an existing **GitHub Branch**, not a branch the app creates automatically.
+- "GitHub raw RSS URL" cannot rely on the backend-only `?body=raw` selector; static publication uses separate clean and raw feed file URLs.
+- "GitHub 文件生命周期" follows feed publication and deletion; stale deleted-feed RSS files should not remain publicly reachable.
+- "启用 GitHub 发布" is resolved as **Publication Activation**, not a blind settings save that can expose unpublished RSS URLs.
+- "GitHub 目录" is resolved as **Publication Directory**, a repository-relative path, not the public URL path.
+- "RSS_PUBLIC_URL" must be the **RSS Public URL Prefix** served by GitHub Pages, Cloudflare Pages, or another static host; copied subscription URLs and feed links append the **Publication Directory** unless the prefix already includes it.
+- "验证 RSS_PUBLIC_URL" means syntax validation only; **Publication Validation** proves GitHub write readiness, not public CDN availability.
+- "推送失败重试" is resolved as **Publication Retry**, not **Manual Sync** or a backfill rerun.
+- "发布状态展示" is resolved as **Publication Overview** inside **Feed Publication Settings**, not a new feed-list column by default.
 - "RSS feed的访问不需要token" is resolved as **Random Feed URL** access without an additional feed token.
 - "RSS订阅" is intentionally **RSS Feed** for this project; the reference project's Atom feed format is not the default terminology here.
 - Current MVP scope: **Feed Rules** support sender/source-based filtering.
