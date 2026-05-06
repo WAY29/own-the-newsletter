@@ -13,7 +13,9 @@ from .publication import (
     GitHubPublicationClient,
     GitHubPublicationConfig,
     PublicationError,
+    PublicationTarget,
     build_feed_urls,
+    coerce_publication_target,
     github_feed_paths,
     normalize_github_branch,
     normalize_github_repository,
@@ -57,13 +59,13 @@ class FeedPublisher:
         record_activity: bool = True,
     ) -> bool:
         settings = self.store.get_publication_settings(include_token_encrypted=True)
-        target = str(settings["active_target"])
+        target = coerce_publication_target(settings["active_target"])
         started = perf_counter()
         if record_activity:
             self.store.mark_publication_started(feed)
         try:
             self._write_feed_files(feed, settings)
-            if target == "github":
+            if target == PublicationTarget.GITHUB:
                 self._publish_github_feed(feed, settings)
         except Exception as exc:
             error = _safe_publication_error(exc)
@@ -108,7 +110,7 @@ class FeedPublisher:
         record_activity: bool = True,
     ) -> None:
         settings = dict(publication_settings or self.store.get_publication_settings(include_token_encrypted=True))
-        target = str(settings["active_target"])
+        target = coerce_publication_target(settings["active_target"])
         started = perf_counter()
         feeds = self.store.list_feeds()
         feed_count = len(feeds)
@@ -119,7 +121,7 @@ class FeedPublisher:
             github_client = None
             changes: list[GitHubFileChange] = []
             feed_titles: list[str] = []
-            if target == "github":
+            if target == PublicationTarget.GITHUB:
                 github_client = self._github_client(settings)
                 github_client.validate_write_access()
             for feed in feeds:
@@ -162,17 +164,17 @@ class FeedPublisher:
 
     def activate_github(self) -> dict[str, Any]:
         settings = self.store.get_publication_settings(include_token_encrypted=True)
-        candidate = {**settings, "active_target": "github"}
+        candidate = {**settings, "active_target": PublicationTarget.GITHUB}
         self.publish_all(
             strict_external=True,
             publication_settings=candidate,
             trigger="publication_activation",
         )
-        self.store.update_publication_settings({"active_target": "github"})
+        self.store.update_publication_settings({"active_target": PublicationTarget.GITHUB})
         return self.store.get_publication_settings()
 
     def activate_backend(self) -> dict[str, Any]:
-        self.store.update_publication_settings({"active_target": "backend"})
+        self.store.update_publication_settings({"active_target": PublicationTarget.BACKEND})
         self.publish_all(
             publication_settings=self.store.get_publication_settings(include_token_encrypted=True),
             trigger="publication_activation",
@@ -195,10 +197,10 @@ class FeedPublisher:
     def delete_feed(self, feed: sqlite3.Row, *, trigger: str = "feed_change_publication") -> None:
         deleted_count = self.delete_files(str(feed["random_slug"]))
         settings = self.store.get_publication_settings(include_token_encrypted=True)
-        target = str(settings["active_target"])
+        target = coerce_publication_target(settings["active_target"])
         started = perf_counter()
         file_count = max(2, deleted_count)
-        if target != "github":
+        if target != PublicationTarget.GITHUB:
             self.store.mark_publication_started(feed)
             self.store.mark_publication_finished(status="success", feed=feed)
             self._record_publish(
@@ -327,7 +329,7 @@ class FeedPublisher:
         *,
         trigger: str,
         status: str,
-        publication_target: str,
+        publication_target: PublicationTarget,
         feed_count: int,
         file_count: int,
         started: float,

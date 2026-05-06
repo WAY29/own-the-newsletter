@@ -6,7 +6,7 @@ from fastapi.testclient import TestClient
 
 from app.config import Settings
 from app.imap_source import FetchedMessage
-from app.publication import GitHubFileChange, GitHubPublicationConfig, PublicationError
+from app.publication import GitHubFileChange, GitHubPublicationConfig, PublicationError, PublicationTarget
 from app.security import CredentialCipher
 from app.main import create_app
 
@@ -186,7 +186,7 @@ def test_publication_retry_logs_all_feed_publish_without_changing_sync_status(tm
     store.mark_sync_finished(feed["id"], status="success", imported_count=3, skipped_count=1)
     store.update_publication_settings(
         {
-            "active_target": "github",
+            "active_target": PublicationTarget.GITHUB,
             "github_repository": "owner/repo",
             "github_branch": "pages",
             "github_directory": "feeds",
@@ -259,7 +259,7 @@ def test_feed_delete_logs_publication_with_deleted_feed_title_context(tmp_path: 
     feed = create_feed(store, cipher, title="Deleted Feed", slug="deleted-random")
     store.update_publication_settings(
         {
-            "active_target": "github",
+            "active_target": PublicationTarget.GITHUB,
             "github_repository": "owner/repo",
             "github_branch": "pages",
             "github_directory": "feeds",

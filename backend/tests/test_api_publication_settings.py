@@ -4,6 +4,7 @@ from fastapi.testclient import TestClient
 
 from app.config import Settings
 from app.main import create_app
+from app.publication import PublicationTarget
 from app.security import CredentialCipher
 
 
@@ -64,6 +65,27 @@ def test_publication_settings_default_response(tmp_path: Path) -> None:
         "last_publication_feed_id": None,
         "last_publication_feed_title": None,
     }
+
+
+def test_publication_settings_invalid_active_target_falls_back_to_backend_wire_value(tmp_path: Path) -> None:
+    app = create_app(settings=build_settings(tmp_path), imap_source=FakeImapSource())
+    with app.state.store.connect() as conn:
+        conn.execute(
+            """
+            INSERT INTO admin_settings(setting_key, setting_value, updated_at)
+            VALUES (?, ?, ?)
+            """,
+            ("publication_active_target", "invalid-target", "2026-04-29T00:00:00+00:00"),
+        )
+
+    with TestClient(app) as client:
+        client.post("/api/auth/login", json={"token": "admin-token"})
+        response = client.get("/api/publication/settings")
+
+    assert response.status_code == 200
+    active_target = response.json()["settings"]["active_target"]
+    assert active_target == "backend"
+    assert type(active_target) is str
 
 
 def test_publication_settings_token_is_write_only_and_encrypted(tmp_path: Path) -> None:
@@ -162,7 +184,7 @@ def test_feed_api_uses_active_publication_target_urls(tmp_path: Path) -> None:
     app = create_app(settings=build_settings(tmp_path), imap_source=FakeImapSource())
     app.state.store.update_publication_settings(
         {
-            "active_target": "github",
+            "active_target": PublicationTarget.GITHUB,
             "github_public_url": "https://cdn.example.test/rss",
             "github_directory": "own",
         }

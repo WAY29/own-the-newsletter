@@ -6,6 +6,7 @@ from pathlib import Path
 import sqlite3
 from typing import Any
 
+from .publication import PublicationTarget, coerce_publication_target
 from .timeutil import iso_now, parse_iso, utc_now
 
 FEED_SORT_COLUMNS = {
@@ -22,7 +23,7 @@ DEFAULT_ADMIN_SETTINGS = {
 }
 
 DEFAULT_PUBLICATION_SETTINGS = {
-    "active_target": "backend",
+    "active_target": PublicationTarget.BACKEND,
     "github_repository": "",
     "github_branch": "main",
     "github_directory": "feeds",
@@ -761,7 +762,4 @@ def _optional_int(value: object) -> int | None:
 
 
 def _publication_target(value: object) -> str:
-    target = str(value)
-    if target not in {"backend", "github"}:
-        return DEFAULT_PUBLICATION_SETTINGS["active_target"]
-    return target
+    return coerce_publication_target(value).value

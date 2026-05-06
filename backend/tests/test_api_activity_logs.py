@@ -7,6 +7,7 @@ from fastapi.testclient import TestClient
 
 from app.config import Settings
 from app.main import create_app
+from app.publication import PublicationTarget
 
 
 class FakeImapSource:
@@ -97,7 +98,7 @@ def test_activity_logs_endpoint_filters_operation_status_trigger_and_feed(tmp_pa
     app.state.activity_log_recorder.record_publish(
         trigger="publication_retry",
         status="success",
-        publication_target="backend",
+        publication_target=PublicationTarget.BACKEND,
         feed_count=1,
         file_count=2,
         completed_at=iso_at(2),
@@ -122,7 +123,7 @@ def test_activity_logs_endpoint_returns_redacted_display_data(tmp_path: Path) ->
     app.state.activity_log_recorder.record_publish(
         trigger="publication_activation",
         status="failed",
-        publication_target="github",
+        publication_target=PublicationTarget.GITHUB,
         feed_count=1,
         file_count=2,
         completed_at=iso_at(1),

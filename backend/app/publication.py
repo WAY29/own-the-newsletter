@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 from collections.abc import Mapping
 from dataclasses import dataclass
+from enum import StrEnum
 import json
 import re
 from typing import Any, Callable
@@ -17,6 +18,20 @@ from .security import redact_sensitive
 class FeedUrls:
     feed_url: str
     raw_feed_url: str
+
+
+class PublicationTarget(StrEnum):
+    BACKEND = "backend"
+    GITHUB = "github"
+
+
+def coerce_publication_target(value: object) -> PublicationTarget:
+    if isinstance(value, PublicationTarget):
+        return value
+    try:
+        return PublicationTarget(str(value))
+    except ValueError:
+        return PublicationTarget.BACKEND
 
 
 @dataclass(frozen=True)
@@ -119,7 +134,10 @@ def build_feed_urls(
     publication_settings: Mapping[str, object],
 ) -> FeedUrls:
     backend_base = public_origin.rstrip("/")
-    if str(publication_settings.get("active_target", "backend")) == "github":
+    active_target = coerce_publication_target(
+        publication_settings.get("active_target", PublicationTarget.BACKEND)
+    )
+    if active_target == PublicationTarget.GITHUB:
         public_url = str(publication_settings.get("github_public_url") or "").strip()
         if public_url:
             base = github_public_feed_base(

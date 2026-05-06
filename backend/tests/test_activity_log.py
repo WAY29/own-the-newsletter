@@ -4,6 +4,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from app.activity_log import ActivityLogQuery, ActivityLogRecorder
+from app.publication import PublicationTarget
 from app.store import MessageStore
 
 
@@ -43,7 +44,7 @@ def test_activity_log_store_queries_filters_paginates_and_retains_newest_entries
                 "trigger": "manual_sync" if i % 3 else "scheduled_sync",
                 "feed_id": int(feed["id"]),
                 "feed_title_snapshot": f"Feed {i}",
-                "publication_target": "backend" if i % 2 else None,
+                "publication_target": PublicationTarget.BACKEND if i % 2 else None,
                 "imported_count": i if i % 2 else None,
                 "skipped_count": 1 if i % 2 else None,
                 "feed_count": None if i % 2 else 1,
@@ -76,7 +77,7 @@ def test_activity_log_query_returns_pagination_metadata(tmp_path: Path) -> None:
     recorder.record_publish(
         trigger="publication_retry",
         status="success",
-        publication_target="backend",
+        publication_target=PublicationTarget.BACKEND,
         feed_count=2,
         file_count=4,
         completed_at=iso_at(1),
@@ -154,7 +155,7 @@ def test_deleted_feed_title_snapshot_remains_in_activity_log(tmp_path: Path) -> 
     recorder.record_publish(
         trigger="feed_change_publication",
         status="success",
-        publication_target="backend",
+        publication_target=PublicationTarget.BACKEND,
         feed_id=int(feed["id"]),
         feed_title=str(feed["title"]),
         feed_count=1,

@@ -1,4 +1,5 @@
 from app.publication import (
+    PublicationTarget,
     build_feed_urls,
     github_feed_paths,
     normalize_github_repository,
@@ -12,7 +13,7 @@ def test_build_feed_urls_defaults_to_backend_endpoint() -> None:
     urls = build_feed_urls(
         slug="random-slug",
         public_origin="https://backend.example.test/",
-        publication_settings={"active_target": "backend"},
+        publication_settings={"active_target": PublicationTarget.BACKEND},
     )
 
     assert urls.feed_url == "https://backend.example.test/f/random-slug.xml"
@@ -24,7 +25,7 @@ def test_build_feed_urls_uses_github_directory_for_static_file_urls() -> None:
         slug="random-slug",
         public_origin="https://backend.example.test",
         publication_settings={
-            "active_target": "github",
+            "active_target": PublicationTarget.GITHUB,
             "github_public_url": "https://cdn.example.test/rss/",
             "github_directory": "own",
         },
@@ -39,7 +40,7 @@ def test_build_feed_urls_keeps_root_github_directory_at_public_url() -> None:
         slug="random-slug",
         public_origin="https://backend.example.test",
         publication_settings={
-            "active_target": "github",
+            "active_target": PublicationTarget.GITHUB,
             "github_public_url": "https://cdn.example.test/rss/",
             "github_directory": "",
         },
@@ -54,7 +55,7 @@ def test_build_feed_urls_does_not_duplicate_github_directory_already_in_public_u
         slug="random-slug",
         public_origin="https://backend.example.test",
         publication_settings={
-            "active_target": "github",
+            "active_target": PublicationTarget.GITHUB,
             "github_public_url": "https://cdn.example.test/rss/own/",
             "github_directory": "own",
         },
@@ -69,7 +70,7 @@ def test_build_feed_urls_falls_back_to_backend_when_github_url_is_missing() -> N
         slug="random-slug",
         public_origin="https://backend.example.test",
         publication_settings={
-            "active_target": "github",
+            "active_target": PublicationTarget.GITHUB,
             "github_public_url": "",
         },
     )

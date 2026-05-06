@@ -5,6 +5,7 @@ import json
 import re
 from typing import Any
 
+from .publication import PublicationTarget
 from .security import redact_sensitive
 from .store import MessageStore
 from .timeutil import iso_now
@@ -19,6 +20,7 @@ ACTIVITY_TRIGGERS = {
     "publication_activation",
     "feed_change_publication",
 }
+PUBLICATION_TARGET_VALUES = frozenset(target.value for target in PublicationTarget)
 
 _SECRET_ASSIGNMENT_RE = re.compile(
     r"(?i)\b(password|passwd|pwd|token|secret|authorization|api[_-]?key)\s*=\s*[^,\s;]+"
@@ -73,7 +75,7 @@ class ActivityLogRecorder:
         *,
         trigger: str,
         status: str,
-        publication_target: str,
+        publication_target: str | PublicationTarget,
         feed_count: int,
         file_count: int,
         feed_id: int | None = None,
@@ -87,6 +89,7 @@ class ActivityLogRecorder:
     ) -> None:
         if status not in ACTIVITY_STATUSES:
             status = "failed"
+        target = str(publication_target)
         self.store.create_activity_log_entry(
             {
                 "operation_type": "publish",
@@ -94,7 +97,7 @@ class ActivityLogRecorder:
                 "trigger": _activity_trigger(trigger),
                 "feed_id": feed_id,
                 "feed_title_snapshot": feed_title,
-                "publication_target": publication_target if publication_target in {"backend", "github"} else None,
+                "publication_target": target if target in PUBLICATION_TARGET_VALUES else None,
                 "feed_count": max(0, int(feed_count)),
                 "file_count": max(0, int(file_count)),
                 "started_at": started_at,

@@ -67,6 +67,13 @@ export type ActivityTrigger =
   | "publication_activation"
   | "feed_change_publication";
 
+export const PUBLICATION_TARGETS = {
+  backend: "backend",
+  github: "github"
+} as const;
+
+export type PublicationTarget = (typeof PUBLICATION_TARGETS)[keyof typeof PUBLICATION_TARGETS];
+
 export type ActivityLogEntry = {
   id: number;
   operation_type: ActivityOperation;
@@ -75,7 +82,7 @@ export type ActivityLogEntry = {
   feed_id: number | null;
   feed_title: string | null;
   feed: { id: number | null; title: string | null } | null;
-  publication_target: "backend" | "github" | null;
+  publication_target: PublicationTarget | null;
   imported_count: number | null;
   skipped_count: number | null;
   feed_count: number | null;
@@ -128,7 +135,7 @@ export type AdminSettings = {
 };
 
 export type PublicationSettings = {
-  active_target: "backend" | "github";
+  active_target: PublicationTarget;
   github_repository: string;
   github_branch: string;
   github_directory: string;

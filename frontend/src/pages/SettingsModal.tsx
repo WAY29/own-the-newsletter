@@ -1,5 +1,12 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
-import { api, type AdminSettings, type PublicationSettings, type PublicationSettingsForm } from "../api";
+import {
+  PUBLICATION_TARGETS,
+  api,
+  type AdminSettings,
+  type PublicationSettings,
+  type PublicationSettingsForm,
+  type PublicationTarget
+} from "../api";
 import { Button, Field, Input, Modal, StatusBadge } from "../components/ui";
 
 const FALLBACK_SETTINGS: AdminSettings = {
@@ -8,7 +15,7 @@ const FALLBACK_SETTINGS: AdminSettings = {
 };
 
 const FALLBACK_PUBLICATION: PublicationSettings = {
-  active_target: "backend",
+  active_target: PUBLICATION_TARGETS.backend,
   github_repository: "",
   github_branch: "main",
   github_directory: "feeds",
@@ -36,7 +43,6 @@ const GITHUB_TOKEN_REQUIRED_HINT =
   "A token with repository write access is required to activate GitHub publishing.";
 
 type SettingsTab = "defaults" | "publication";
-type PublicationTarget = PublicationSettings["active_target"];
 type BusyState =
   | "loading"
   | "save-defaults"
@@ -71,7 +77,7 @@ export default function SettingsModal({
   onClose: () => void;
 }) {
   const [tab, setTab] = useState<SettingsTab>("defaults");
-  const [publicationTarget, setPublicationTarget] = useState<PublicationTarget>("backend");
+  const [publicationTarget, setPublicationTarget] = useState<PublicationTarget>(PUBLICATION_TARGETS.backend);
   const [form, setForm] = useState<AdminSettings>(FALLBACK_SETTINGS);
   const [publication, setPublication] = useState<PublicationSettings>(FALLBACK_PUBLICATION);
   const [publicationForm, setPublicationForm] = useState<PublicationSettingsForm>({
@@ -317,7 +323,7 @@ export default function SettingsModal({
                 onSelect={setPublicationTarget}
               />
 
-              {publicationTarget === "backend" ? (
+              {publicationTarget === PUBLICATION_TARGETS.backend ? (
                 <BackendTargetPanel activeTarget={publication.active_target} />
               ) : (
                 <GithubTargetPanel
@@ -361,27 +367,27 @@ function PublicationTargetSelector({
     <div className="publication-target-selector" aria-label="Public RSS target">
       <button
         type="button"
-        aria-pressed={selectedTarget === "backend"}
-        className={targetOptionClass(selectedTarget === "backend")}
-        onClick={() => onSelect("backend")}
+        aria-pressed={selectedTarget === PUBLICATION_TARGETS.backend}
+        className={targetOptionClass(selectedTarget === PUBLICATION_TARGETS.backend)}
+        onClick={() => onSelect(PUBLICATION_TARGETS.backend)}
       >
         <span>
           <strong>Backend</strong>
           <small>Use the app-hosted RSS endpoint.</small>
         </span>
-        {activeTarget === "backend" ? <em>Current</em> : null}
+        {activeTarget === PUBLICATION_TARGETS.backend ? <em>Current</em> : null}
       </button>
       <button
         type="button"
-        aria-pressed={selectedTarget === "github"}
-        className={targetOptionClass(selectedTarget === "github")}
-        onClick={() => onSelect("github")}
+        aria-pressed={selectedTarget === PUBLICATION_TARGETS.github}
+        className={targetOptionClass(selectedTarget === PUBLICATION_TARGETS.github)}
+        onClick={() => onSelect(PUBLICATION_TARGETS.github)}
       >
         <span>
           <strong>GitHub</strong>
           <small>Publish static RSS files to a repository.</small>
         </span>
-        {activeTarget === "github" ? <em>Current</em> : null}
+        {activeTarget === PUBLICATION_TARGETS.github ? <em>Current</em> : null}
       </button>
     </div>
   );
@@ -396,7 +402,7 @@ function BackendTargetPanel({ activeTarget }: { activeTarget: PublicationTarget 
           RSS URLs are served by this app. No GitHub repository, token, or static hosting setup is required.
         </p>
       </div>
-      {activeTarget === "backend" ? (
+      {activeTarget === PUBLICATION_TARGETS.backend ? (
         <span className="publication-target-current">Current target</span>
       ) : null}
     </div>
@@ -493,7 +499,7 @@ function PublicationActions({
   return (
     <div className="form-actions settings-actions">
       <div className="settings-actions-primary">
-        {selectedTarget === "github" ? (
+        {selectedTarget === PUBLICATION_TARGETS.github ? (
           <GithubTargetActions
             activeTarget={activeTarget}
             busy={busy}
@@ -542,7 +548,7 @@ function GithubTargetActions({
       <Button variant="ghost" type="submit" disabled={isBusy}>
         {busy === "save-publication" ? "Saving..." : "Save GitHub settings"}
       </Button>
-      {activeTarget === "github" ? (
+      {activeTarget === PUBLICATION_TARGETS.github ? (
         <Button variant="ghost" type="button" onClick={onRetry} disabled={isBusy}>
           {busy === "retry" ? "Publishing..." : "Publish all / Retry"}
         </Button>
@@ -568,7 +574,7 @@ function BackendTargetActions({
   onActivate: () => void;
   onRetry: () => void;
 }) {
-  if (activeTarget !== "backend") {
+  if (activeTarget !== PUBLICATION_TARGETS.backend) {
     return (
       <Button type="button" onClick={onActivate} disabled={isBusy}>
         {busy === "activate-backend" ? "Switching..." : "Switch to backend"}
@@ -594,7 +600,9 @@ function PublicationOverview({ publication }: { publication: PublicationSettings
     <div className="publication-overview">
       <div>
         <span className="publication-overview-label">Active target</span>
-        <strong>{publication.active_target === "github" ? "GitHub static hosting" : "Backend endpoint"}</strong>
+        <strong>
+          {publication.active_target === PUBLICATION_TARGETS.github ? "GitHub static hosting" : "Backend endpoint"}
+        </strong>
       </div>
       <div>
         <span className="publication-overview-label">Latest publication</span>

@@ -5,7 +5,7 @@ from fastapi.testclient import TestClient
 from app.config import Settings
 from app.imap_source import FetchedMessage
 from app.main import create_app
-from app.publication import GitHubFileChange, GitHubPublicationConfig, PublicationError
+from app.publication import GitHubFileChange, GitHubPublicationConfig, PublicationError, PublicationTarget
 from app.security import CredentialCipher
 
 
@@ -254,7 +254,7 @@ def test_publication_retry_does_not_fetch_imap_or_change_sync_status(tmp_path: P
     store.mark_sync_finished(feed["id"], status="success", imported_count=3, skipped_count=1)
     store.update_publication_settings(
         {
-            "active_target": "github",
+            "active_target": PublicationTarget.GITHUB,
             "github_repository": "owner/repo",
             "github_branch": "pages",
             "github_directory": "feeds",
@@ -291,7 +291,7 @@ def test_sync_success_and_publication_failure_are_reported_separately(tmp_path: 
     feed = create_feed(store, cipher)
     store.update_publication_settings(
         {
-            "active_target": "github",
+            "active_target": PublicationTarget.GITHUB,
             "github_repository": "owner/repo",
             "github_branch": "pages",
             "github_directory": "feeds",
@@ -326,7 +326,7 @@ def test_create_edit_and_scheduled_sync_publish_to_active_github_target(tmp_path
     cipher = CredentialCipher(settings.secret_key)
     store.update_publication_settings(
         {
-            "active_target": "github",
+            "active_target": PublicationTarget.GITHUB,
             "github_repository": "owner/repo",
             "github_branch": "pages",
             "github_directory": "feeds",
@@ -383,7 +383,7 @@ def test_deleting_feed_removes_github_static_files_when_github_is_active(tmp_pat
     feed = create_feed(store, cipher)
     store.update_publication_settings(
         {
-            "active_target": "github",
+            "active_target": PublicationTarget.GITHUB,
             "github_repository": "owner/repo",
             "github_branch": "pages",
             "github_directory": "feeds",
@@ -418,7 +418,7 @@ def test_switching_back_to_backend_stops_github_pushes(tmp_path: Path) -> None:
     feed = create_feed(store, cipher)
     store.update_publication_settings(
         {
-            "active_target": "github",
+            "active_target": PublicationTarget.GITHUB,
             "github_repository": "owner/repo",
             "github_branch": "pages",
             "github_directory": "feeds",
