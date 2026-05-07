@@ -312,6 +312,53 @@ def test_sync_success_and_publication_failure_are_reported_separately(tmp_path: 
     assert publication.json()["settings"]["last_publication_status"] == "failed"
 
 
+def test_github_sync_without_new_items_does_not_publish(tmp_path: Path) -> None:
+    settings = build_settings(tmp_path)
+    github_client = None
+
+    def factory(config: GitHubPublicationConfig):
+        nonlocal github_client
+        github_client = FakeGitHubClient(config)
+        return github_client
+
+    app = create_app(settings=settings, imap_source=FakeImapSource(), github_client_factory=factory)
+    store = app.state.store
+    cipher = CredentialCipher(settings.secret_key)
+    feed = create_feed(store, cipher)
+    store.update_publication_settings(
+        {
+            "active_target": PublicationTarget.GITHUB,
+            "github_repository": "owner/repo",
+            "github_branch": "pages",
+            "github_directory": "feeds",
+            "github_public_url": "https://cdn.example.test/rss",
+            "github_token_encrypted": cipher.encrypt("ghp_secret-token"),
+        }
+    )
+
+    with TestClient(app) as client:
+        client.post("/api/auth/login", json={"token": "admin-token"})
+        first = client.post(f"/api/feeds/{feed['id']}/sync")
+        assert first.status_code == 200
+        assert first.json()["imported_count"] == 1
+        assert github_client is not None
+        assert len(github_client.commits) == 1
+
+        github_client.commits.clear()
+        github_client.upserts.clear()
+        second = client.post(f"/api/feeds/{feed['id']}/sync")
+        logs = client.get("/api/activity-logs?trigger=manual_sync&page_size=10")
+
+    assert second.status_code == 200
+    assert second.json()["status"] == "success"
+    assert second.json()["imported_count"] == 0
+    assert github_client is not None
+    assert github_client.commits == []
+    assert github_client.upserts == []
+    publish_entries = [entry for entry in logs.json()["entries"] if entry["operation_type"] == "publish"]
+    assert len(publish_entries) == 1
+
+
 def test_create_edit_and_scheduled_sync_publish_to_active_github_target(tmp_path: Path) -> None:
     settings = build_settings(tmp_path)
     github_client = None

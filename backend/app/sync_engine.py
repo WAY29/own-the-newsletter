@@ -154,7 +154,7 @@ class SyncEngine:
                 first_sync_completed=result.status == "success",
             )
             self._record_sync_result(result, trigger=activity_trigger, started=started)
-            if result.status == "success":
+            if self._should_publish_after_sync(result):
                 self.publisher.publish_by_id(feed_id, trigger=activity_trigger)
             return result
         except Exception as exc:  # pragma: no cover - exercised through integration
@@ -223,7 +223,7 @@ class SyncEngine:
                     first_sync_completed=result.status == "success",
                 )
                 self._record_sync_result(result, trigger=trigger, started=started_by_feed.get(feed_id, perf_counter()))
-                if result.status == "success":
+                if self._should_publish_after_sync(result):
                     self.publisher.publish_by_id(feed_id, trigger=trigger)
                 results.append(result)
             return results
@@ -499,6 +499,9 @@ class SyncEngine:
             duration_ms=int((perf_counter() - started) * 1000),
             error=result.error,
         )
+
+    def _should_publish_after_sync(self, result: SyncResult) -> bool:
+        return result.status == "success" and result.imported_count > 0
 
 
 def _safe_values(values: list[str]) -> list[str]:
